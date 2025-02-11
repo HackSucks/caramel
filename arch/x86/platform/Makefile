@@ -9,5 +9,6 @@ obj-y	+= intel/
 obj-y	+= intel-mid/
 obj-y	+= intel-quark/
 obj-y	+= olpc/
+obj-y   += ps4/
 obj-y	+= scx200/
 obj-y	+= uv/
