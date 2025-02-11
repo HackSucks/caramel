@@ -124,6 +124,8 @@ const char *amdgpu_asic_name[] = {
 	"KAVERI",
 	"KABINI",
 	"HAWAII",
+	"LIVERPOOL",
+	"GLADIUS",
 	"MULLINS",
 	"TOPAZ",
 	"TONGA",
@@ -2027,6 +2029,8 @@ static int amdgpu_device_ip_early_init(struct amdgpu_device *adev)
 	case CHIP_KAVERI:
 	case CHIP_KABINI:
 	case CHIP_MULLINS:
+	case CHIP_LIVERPOOL:
+	case CHIP_GLADIUS:
 		if (adev->flags & AMD_IS_APU)
 			adev->family = AMDGPU_FAMILY_KV;
 		else
@@ -3510,6 +3514,9 @@ bool amdgpu_device_asic_has_dc_support(struct pci_dev *pdev,
 	case CHIP_VERDE:
 	case CHIP_OLAND:
 		return amdgpu_dc != 0 && IS_ENABLED(CONFIG_DRM_AMD_DC_SI);
+	case CHIP_LIVERPOOL:
+	case CHIP_GLADIUS:
+		return amdgpu_dc > 0;
 	default:
 		return amdgpu_dc != 0;
 #else
@@ -6787,6 +6794,8 @@ bool amdgpu_device_has_display_hardware(struct amdgpu_device *adev)
 	case CHIP_KAVERI:
 	case CHIP_KABINI:
 	case CHIP_MULLINS:
+	case CHIP_LIVERPOOL:
+	case CHIP_GLADIUS:
 #endif
 	case CHIP_TONGA:
 	case CHIP_FIJI:
