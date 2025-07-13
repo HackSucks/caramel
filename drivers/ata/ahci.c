@@ -53,6 +53,7 @@ enum {
 enum board_ids {
 	/* board IDs by feature in alphabetical order */
 	board_ahci,
+	board_ahci_31bit_dma,
 	board_ahci_43bit_dma,
 	board_ahci_ign_iferr,
 	board_ahci_no_debounce_delay,
@@ -131,6 +132,13 @@ static struct ata_port_operations ahci_avn_ops = {
 static const struct ata_port_info ahci_port_info[] = {
 	/* by features */
 	[board_ahci] = {
+		.flags		= AHCI_FLAG_COMMON,
+		.pio_mask	= ATA_PIO4,
+		.udma_mask	= ATA_UDMA6,
+		.port_ops	= &ahci_ops,
+	},
+	[board_ahci_31bit_dma] = {
+		AHCI_HFLAGS	(AHCI_HFLAG_31BIT_ONLY),
 		.flags		= AHCI_FLAG_COMMON,
 		.pio_mask	= ATA_PIO4,
 		.udma_mask	= ATA_UDMA6,
@@ -1569,13 +1577,13 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 
 	}, {
 		PCI_VDEVICE(SONY, PCI_DEVICE_ID_SONY_AEOLIA_AHCI),
-		.driver_data = board_ahci,
+		.driver_data = board_ahci_31bit_dma,
 	}, {
 		PCI_VDEVICE(SONY, PCI_DEVICE_ID_SONY_BELIZE_AHCI),
-		.driver_data = board_ahci,
+		.driver_data = board_ahci_31bit_dma,
 	}, {
 		PCI_VDEVICE(SONY, PCI_DEVICE_ID_SONY_BAIKAL_AHCI),
-		.driver_data = board_ahci,
+		.driver_data = board_ahci_31bit_dma,
 	}, {
 		/* Generic, PCI class code for AHCI */
 		PCI_DEVICE_CLASS(PCI_CLASS_STORAGE_SATA_AHCI, 0xffffff),
@@ -2005,9 +2013,12 @@ static int ahci_configure_dma_masks(struct pci_dev *pdev,
 		dma_bits = 64;
 		if (hpriv->flags & AHCI_HFLAG_43BIT_ONLY)
 			dma_bits = 43;
+		if (hpriv->flags & AHCI_HFLAG_31BIT_ONLY)
+			dma_bits = 31;
 	} else {
 		dma_bits = 32;
 	}
+	dev_info(&pdev->dev, "DMA bits = %d\n", dma_bits);
 
 	/*
 	 * If the device fixup already set the dma_mask to some non-standard
@@ -2019,24 +2030,8 @@ static int ahci_configure_dma_masks(struct pci_dev *pdev,
 	if (pdev->dma_mask && pdev->dma_mask < DMA_BIT_MASK(32))
 		return 0;
 
-	#ifdef CONFIG_X86_PS4
-	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-		rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(31));
-		if (rc) {
-			dev_err(&pdev->dev, "31-bit DMA enable failed\n");
-			return rc;
-		}
-		rc = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(31));
-		if (rc) {
-			dev_err(&pdev->dev,
-				"31-bit consistent DMA enable failed\n");
-			return rc;
-		}
-		return 0;
-	}
-	#endif
-
 	rc = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(dma_bits));
+	dev_info(&pdev->dev, "DMA enable\n");
 	if (rc)
 		dev_err(&pdev->dev, "DMA enable failed\n");
 	return rc;
@@ -2717,7 +2712,8 @@ static void ahci_init_irq(struct pci_dev *pdev, unsigned int n_ports,
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-		return apcie_assign_irqs(pdev, n_ports);
+		apcie_assign_irqs(pdev, n_ports);
+		return;
 	}
 	#endif
 	
