@@ -141,7 +141,6 @@ static const struct pci_device_id sky2_id_table[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_MARVELL, 0x4382) }, /* 88E8079 */
 	{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_AEOLIA_GBE) },
 	{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_BELIZE_GBE) },
-	{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_BAIKAL_GBE) },
 	{ 0 }
 };
 
@@ -216,7 +215,6 @@ static inline u16 gm_phy_read(struct sky2_hw *hw, unsigned port, u16 reg)
 	__gm_phy_read(hw, port, reg, &v);
 	return v;
 }
-
 
 static void sky2_power_on(struct sky2_hw *hw)
 {
@@ -329,7 +327,6 @@ static const u16 gm_fc_disable[] = {
 	[FC_RX]	  = GM_GPCR_FC_TX_DIS,
 	[FC_BOTH] = 0,
 };
-
 
 static void sky2_phy_init(struct sky2_hw *hw, unsigned port)
 {
@@ -1138,7 +1135,6 @@ static inline void sky2_put_idx(struct sky2_hw *hw, unsigned q, u16 idx)
 	sky2_write16(hw, Y2_QADDR(q, PREF_UNIT_PUT_IDX), idx);
 }
 
-
 static inline struct sky2_rx_le *sky2_next_rx(struct sky2_port *sky2)
 {
 	struct sky2_rx_le *le = sky2->rx_le + sky2->rx_put;
@@ -1210,7 +1206,6 @@ static void sky2_rx_submit(struct sky2_port *sky2,
 	for (i = 0; i < skb_shinfo(re->skb)->nr_frags; i++)
 		sky2_rx_add(sky2, OP_BUFFER, re->frag_addr[i], PAGE_SIZE);
 }
-
 
 static int sky2_rx_map_skb(struct pci_dev *pdev, struct rx_ring_info *re,
 			    unsigned size)
@@ -1737,7 +1732,6 @@ static int sky2_setup_irq(struct sky2_hw *hw, const char *name)
 	return err;
 }
 
-
 /* Bring up network interface. */
 static int sky2_open(struct net_device *dev)
 {
@@ -1936,7 +1930,6 @@ static netdev_tx_t sky2_xmit_frame(struct sk_buff *skb,
 	le->length = cpu_to_le16(len);
 	le->ctrl = ctrl;
 	le->opcode = mss ? (OP_LARGESEND | HW_OWNER) : (OP_PACKET | HW_OWNER);
-
 
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 		const skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
@@ -3053,6 +3046,9 @@ static int sky2_poll(struct napi_struct *napi, int work_limit)
 
 	napi_complete_done(napi, work_done);
 	sky2_read32(hw, B0_Y2_SP_LISR);
+#ifdef CONFIG_X86_PS4
+	sky2_write32(hw, AEOLIA_SP_ICR,1);
+#endif
 done:
 
 	return work_done;
@@ -3062,8 +3058,9 @@ static irqreturn_t sky2_intr(int irq, void *dev_id)
 {
 	struct sky2_hw *hw = dev_id;
 	u32 status;
-
-	/* Reading this mask interrupts as side effect */
+#ifdef CONFIG_X86_PS4
+	sky2_write32(hw, AEOLIA_SP_ICR, 2);
+#endif
 	status = sky2_read32(hw, B0_Y2_SP_ISRC2);
 	if (status == 0 || status == ~0) {
 		sky2_write32(hw, B0_Y2_SP_ICR, 2);
@@ -3071,7 +3068,6 @@ static irqreturn_t sky2_intr(int irq, void *dev_id)
 	}
 
 	prefetch(&hw->st_le[hw->st_idx]);
-
 	napi_schedule(&hw->napi);
 
 	return IRQ_HANDLED;
@@ -3123,7 +3119,6 @@ static inline u32 sky2_clk2us(const struct sky2_hw *hw, u32 clk)
 {
 	return clk / sky2_mhz(hw);
 }
-
 
 static int sky2_init(struct sky2_hw *hw)
 {
@@ -4552,7 +4547,6 @@ static struct notifier_block sky2_notifier = {
 	.notifier_call = sky2_device_event,
 };
 
-
 static __init void sky2_debug_init(void)
 {
 	struct dentry *ent;
@@ -4962,7 +4956,6 @@ static int sky2_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 			goto err_out_free_regions;
 		}
 	}
-
 
 #ifdef __BIG_ENDIAN
 	/* The sk98lin vendor driver uses hardware byte swapping but
