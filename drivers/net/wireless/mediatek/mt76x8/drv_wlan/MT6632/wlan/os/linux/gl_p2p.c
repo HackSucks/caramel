@@ -60,7 +60,6 @@
 *    Wireless LAN Adapters.
 */
 
-
 /*******************************************************************************
 *                         C O M P I L E R   F L A G S
 ********************************************************************************
@@ -74,7 +73,6 @@
 #include <linux/poll.h>
 
 #include <linux/kmod.h>
-
 
 #include "gl_os.h"
 #include "debug.h"
@@ -115,7 +113,6 @@
 ********************************************************************************
 */
 
-
 /*******************************************************************************
 *                           P R I V A T E   D A T A
 ********************************************************************************
@@ -127,6 +124,25 @@ struct wireless_dev *gprP2pRoleWdev[KAL_P2P_NUM];
 struct net_device *gPrP2pDev[KAL_P2P_NUM];
 
 #if CFG_ENABLE_WIFI_DIRECT_CFG_80211
+
+static int mtk_p2p_cfg80211_set_wiphy_params_adapter(struct wiphy *wiphy, int param, u32 val)
+{
+	return mtk_p2p_cfg80211_set_wiphy_params(wiphy, val);
+}
+
+static int mtk_p2p_cfg80211_set_txpower_adapter(struct wiphy *wiphy, struct wireless_dev *wdev,
+	int ifindex, enum nl80211_tx_power_setting type, int dbm)
+{
+	return mtk_p2p_cfg80211_set_txpower(wiphy, wdev, type, dbm);
+}
+
+static int mtk_p2p_cfg80211_get_txpower_adapter(struct wiphy *wiphy, struct wireless_dev *wdev,
+	int ifindex, unsigned int dbm, int *type)
+{
+	unsigned int out = dbm;
+	return mtk_p2p_cfg80211_get_txpower(wiphy, wdev, ifindex, &out);
+}
+
 static struct cfg80211_ops mtk_p2p_ops = {
 #if (CFG_ENABLE_WIFI_DIRECT_CFG_80211 != 0)
 	/* Froyo */
@@ -146,7 +162,7 @@ static struct cfg80211_ops mtk_p2p_ops = {
 	.start_ap = mtk_p2p_cfg80211_start_ap,
 	.change_beacon = mtk_p2p_cfg80211_change_beacon,
 	.stop_ap = mtk_p2p_cfg80211_stop_ap,
-	.set_wiphy_params = mtk_p2p_cfg80211_set_wiphy_params,
+	.set_wiphy_params = mtk_p2p_cfg80211_set_wiphy_params_adapter,
 	.del_station = mtk_p2p_cfg80211_del_station,
 	.set_bitrate_mask = mtk_p2p_cfg80211_set_bitrate_mask,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
@@ -162,8 +178,8 @@ static struct cfg80211_ops mtk_p2p_ops = {
 	.set_default_mgmt_key = mtk_p2p_cfg80211_set_mgmt_key,
 	.join_ibss = mtk_p2p_cfg80211_join_ibss,
 	.leave_ibss = mtk_p2p_cfg80211_leave_ibss,
-	.set_tx_power = mtk_p2p_cfg80211_set_txpower,
-	.get_tx_power = mtk_p2p_cfg80211_get_txpower,
+	.set_tx_power = mtk_p2p_cfg80211_set_txpower_adapter,
+	.get_tx_power = mtk_p2p_cfg80211_get_txpower_adapter,
 	.set_power_mgmt = mtk_p2p_cfg80211_set_power_mgmt,
 #if (CFG_SUPPORT_DFS_MASTER == 1)
 	.start_radar_detection = mtk_p2p_cfg80211_start_radar_detection,
@@ -241,7 +257,6 @@ mtk_cfg80211_default_mgmt_stypes[NUM_NL80211_IFTYPES] = {
 };
 
 #endif
-
 
 static const struct iw_priv_args rP2PIwPrivTable[] = {
 #if 0
@@ -404,7 +419,6 @@ mtk_iface_combinations_p2p[] = {
 #endif
 };
 
-
 const struct ieee80211_iface_combination *p_mtk_iface_combinations_sta = mtk_iface_combinations_sta;
 const INT_32 mtk_iface_combinations_sta_num = ARRAY_SIZE(mtk_iface_combinations_sta);
 
@@ -435,7 +449,6 @@ static int p2pHardStartXmit(IN struct sk_buff *prSkb, IN struct net_device *prDe
 static int p2pSetMACAddress(IN struct net_device *prDev, void *addr);
 
 static int p2pDoIOCTL(struct net_device *prDev, struct ifreq *prIFReq, int i4Cmd);
-
 
 /*----------------------------------------------------------------------------*/
 /*!
@@ -568,15 +581,12 @@ static BOOLEAN p2PAllocInfo(IN P_GLUE_INFO_T prGlueInfo, IN UINT_8 ucIdex)
 	else
 		DBGLOG(P2P, INFO, "prP2PInfo ok\n");
 
-
-
 	/* chk if alloc successful or not */
 	if (prGlueInfo->prP2PInfo[ucIdex] && prGlueInfo->prP2PDevInfo && prAdapter->prP2pInfo &&
 		prWifiVar->prP2PConnSettings[ucIdex] &&
 /* prWifiVar->prP2pFsmInfo && */
 	    prWifiVar->prP2pSpecificBssInfo[ucIdex])
 		return TRUE;
-
 
 	DBGLOG(P2P, ERROR, "[fail!]p2PAllocInfo :fail\n");
 
@@ -680,8 +690,6 @@ BOOLEAN p2PFreeInfo(P_GLUE_INFO_T prGlueInfo)
 
 }
 
-
-
 BOOLEAN p2pNetRegister(P_GLUE_INFO_T prGlueInfo, BOOLEAN fgIsRtnlLockAcquired)
 {
 	BOOLEAN fgDoRegister = FALSE;
@@ -742,7 +750,6 @@ BOOLEAN p2pNetRegister(P_GLUE_INFO_T prGlueInfo, BOOLEAN fgIsRtnlLockAcquired)
 			gPrP2pDev[1] = prGlueInfo->prP2PInfo[1]->prDevHandler;
 			ret = TRUE;
 		}
-
 
 		DBGLOG(P2P, INFO, "P2P 2nd interface work\n");
 	}
@@ -908,9 +915,6 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, const cha
 		if (!prGlueInfo->prAdapter->fgEnable5GBand)
 			prP2pWdev->wiphy->bands[BAND_5G] = NULL;
 
-
-
-
 		/* 2.2 wdev initialization */
 		if (fgIsApMode)
 			prP2pWdev->iftype = NL80211_IFTYPE_AP;
@@ -918,7 +922,6 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, const cha
 			prP2pWdev->iftype = NL80211_IFTYPE_P2P_CLIENT;
 
 #endif /* CFG_ENABLE_WIFI_DIRECT_CFG_80211 */
-
 
 		/* 3. allocate netdev */
 #if KERNEL_VERSION(3, 17, 0) <= CFG80211_VERSION_CODE
@@ -983,7 +986,6 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, const cha
 
 		kalResetStats(prGlueInfo->prP2PInfo[i]->prDevHandler);
 
-
 #if 0
 		/* 7. net device initialize */
 		netif_carrier_off(prGlueInfo->prP2PInfo->prDevHandler);
@@ -1009,7 +1011,6 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, const cha
 			(PVOID) prGlueInfo->prP2PInfo[i]->prDevHandler);
 
 		prGlueInfo->prP2PInfo[i]->aprRoleHandler = prGlueInfo->prP2PInfo[i]->prDevHandler;
-
 
 		DBGLOG(P2P, INFO, "check prDevHandler = %p\n", prGlueInfo->prP2PInfo[i]->prDevHandler);
 		DBGLOG(P2P, INFO, "aprRoleHandler = %p\n", prGlueInfo->prP2PInfo[i]->aprRoleHandler);
@@ -1039,7 +1040,6 @@ BOOLEAN glRegisterP2P(P_GLUE_INFO_T prGlueInfo, const char *prDevName, const cha
 	else
 		prGlueInfo->prAdapter->prP2pInfo->u4DeviceNum = 1;
 
-
 	return TRUE;
 #if 0
 err_reg_netdev:
@@ -1048,7 +1048,6 @@ err_reg_netdev:
 err_alloc_netdev:
 	return FALSE;
 }				/* end of glRegisterP2P() */
-
 
 BOOLEAN glP2pCreateWirelessDevice(P_GLUE_INFO_T prGlueInfo)
 {
@@ -1782,7 +1781,6 @@ int p2pDoIOCTL(struct net_device *prDev, struct ifreq *prIfReq, int i4Cmd)
 
 	return ret;
 }				/* end of p2pDoIOCTL() */
-
 
 /*----------------------------------------------------------------------------*/
 /*!
