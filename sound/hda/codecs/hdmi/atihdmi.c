@@ -480,7 +480,6 @@ static int atihdmi_setup_stream(struct hda_codec *codec, hda_nid_t cvt_nid,
 					 stream_tag, format);
 }
 
-
 static int atihdmi_init(struct hda_codec *codec)
 {
 	struct hdmi_spec *spec = codec->spec;
@@ -503,6 +502,17 @@ static int atihdmi_init(struct hda_codec *codec)
 					    ATI_VERB_SET_MULTICHANNEL_MODE,
 					    ATI_MULTICHANNEL_MODE_SINGLE);
 	}
+
+	if (codec->core.vendor_id == 0x1002aa01) {
+		int cvt_idx;
+		for (cvt_idx = 0; cvt_idx < spec->num_cvts; cvt_idx++) {
+			struct hdmi_spec_per_cvt *per_cvt = get_cvt(spec, cvt_idx);
+			snd_hda_codec_write(codec, per_cvt->cvt_nid, 0,
+					    AC_VERB_SET_DIGI_CONVERT_1,
+					    AC_DIG1_ENABLE);
+		}
+	}
+
 	codec->auto_runtime_pm = 1;
 
 	return 0;
