@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-
 // TODO (ps4patches): Make functions atomic,
 //  https://lore.kernel.org/linux-arm-kernel/20211020181901.2114645-5-sam@ravnborg.org/
 
@@ -21,6 +20,7 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_probe_helper.h>
 
 #include <linux/pci.h>
 #include <drm/drm_bridge.h>
@@ -28,7 +28,6 @@
 
 #include <linux/i2c.h>
 #include <linux/i2c-algo-bit.h>
-
 
 #include "radeon.h"
 #include "radeon_mode.h"
@@ -58,7 +57,6 @@
 
 #define TDPCMODE 0x7009
 
-
 #define UPDCTRL 0x7011
 #define UPDCTRL_ALLUPD BIT(7)
 #define UPDCTRL_AVIIUPD BIT(6)
@@ -68,7 +66,6 @@
 #define UPDCTRL_VIFUPD BIT(2)
 #define UPDCTRL_AUDUPD BIT(1)
 #define UPDCTRL_CSCUPD BIT(0)
-
 
 #define VINCNT 0x7040
 #define VINCNT_VIF_FILEN BIT(6)
@@ -702,7 +699,7 @@ enum drm_connector_status radeon_ps4_bridge_detect(struct drm_connector *connect
 	struct radeon_connector_atom_dig *radeon_dig_connector = radeon_connector->con_priv;
 
 	radeon_dig_connector->dp_sink_type = CONNECTOR_OBJECT_ID_DISPLAYPORT;
-	radeon_dp_getdpcd(radeon_connector);
+	int dpcd_ret = radeon_dp_getdpcd(radeon_connector);
 
 	mutex_lock(&mn_bridge->mutex);
 	cq_init(&mn_bridge->cq, 4);
@@ -715,9 +712,9 @@ enum drm_connector_status radeon_ps4_bridge_detect(struct drm_connector *connect
 	reg = mn_bridge->cq.reply.databuf[3];
 	mutex_unlock(&mn_bridge->mutex);
 
-	DRM_DEBUG_KMS("TMONREG=0x%02x\n", reg);
+	DRM_DEBUG_KMS("TMONREG=0x%02x dpcd_ret=%d\n", reg, dpcd_ret);
 
-	if (reg & TMONREG_HPD)
+	if ((reg & TMONREG_HPD) && dpcd_ret == 0)
 		return connector_status_connected;
 	else
 		return connector_status_disconnected;
@@ -765,7 +762,9 @@ int radeon_ps4_bridge_register(struct drm_connector *connector,
 	mn_bridge->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
 	mn_bridge->bridge.funcs = &radeon_ps4_bridge_funcs;
 
-	// TODO (ps4patches): This seems to be the new way of adding bridges
+	connector->polled = DRM_CONNECTOR_POLL_CONNECT |
+			    DRM_CONNECTOR_POLL_DISCONNECT;
+
 	drm_bridge_add(&mn_bridge->bridge);
 
 	ret = drm_bridge_attach(mn_bridge->encoder, &mn_bridge->bridge, NULL, DRM_BRIDGE_ATTACH_NO_CONNECTOR);
