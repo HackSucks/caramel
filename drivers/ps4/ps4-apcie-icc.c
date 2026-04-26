@@ -1,5 +1,3 @@
-#define DEBUG
-
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/wait.h>
@@ -16,6 +14,9 @@
  * having to get a reference to the device. */
 static struct apcie_dev *icc_sc;
 DEFINE_MUTEX(icc_mutex);
+static DEFINE_MUTEX(icc_ioctl_mutex);
+static bool icc_chrdev_registered;
+static int icc_major;
 
 /* The ICC message passing interface seems to be potentially designed to
  * support multiple outstanding requests at once, but the original PS4 OS never
@@ -44,7 +45,7 @@ void icc_reboot(void);
 int apcie_icc_init(struct apcie_dev *sc);
 void apcie_icc_remove(struct apcie_dev *sc);
 
-#define ICC_MAJOR	'I'
+#define ICC_IOCTL_TYPE	'I'
 
  struct icc_cmd {
  	u8 major;
@@ -55,7 +56,7 @@ void apcie_icc_remove(struct apcie_dev *sc);
  	u16 reply_length;
  };
 
-#define ICC_IOCTL_CMD _IOWR(ICC_MAJOR, 1, struct icc_cmd)
+#define ICC_IOCTL_CMD _IOWR(ICC_IOCTL_TYPE, 1, struct icc_cmd)
 
 static u16 checksum(const void *p, int length)
 {
@@ -172,19 +173,24 @@ static void handle_message(struct apcie_dev *sc)
 static irqreturn_t icc_interrupt(int irq, void *arg)
 {
 	struct apcie_dev *sc = arg;
+	u32 pending;
 	u32 status;
 	u32 ret = IRQ_NONE;
+	int loops;
 
-	do {
+	for (loops = 0; loops < 64; loops++) {
 		status = ioread32(sc->bar4 + APCIE_REG_ICC_STATUS);
+		pending = status & (APCIE_ICC_SEND | APCIE_ICC_ACK);
+		if (!pending)
+			return ret;
 
-		if (status & APCIE_ICC_ACK) {
+		if (pending & APCIE_ICC_ACK) {
 			iowrite32(APCIE_ICC_ACK,
 				  sc->bar4 + APCIE_REG_ICC_STATUS);
 			ret = IRQ_HANDLED;
 		}
 
-		if (status & APCIE_ICC_SEND) {
+		if (pending & APCIE_ICC_SEND) {
 			iowrite32(APCIE_ICC_SEND,
 				  sc->bar4 + APCIE_REG_ICC_STATUS);
 			handle_message(sc);
@@ -194,7 +200,11 @@ static irqreturn_t icc_interrupt(int irq, void *arg)
 				  sc->bar4 + APCIE_REG_ICC_DOORBELL);
 			ret = IRQ_HANDLED;
 		}
-	} while (status);
+	}
+
+	dev_warn_ratelimited(&sc->pdev->dev,
+			     "icc: IRQ status stuck after 64 loops (status=0x%08x)\n",
+			     status);
 
 	return ret;
 }
@@ -296,10 +306,12 @@ int apcie_icc_cmd(u8 major, u16 minor, const void *data, u16 length,
 	mutex_lock(&icc_mutex);
 	if (!icc_sc) {
 		pr_err("icc: not ready\n");
-		return -EAGAIN;
+		ret = -EAGAIN;
+		goto out_unlock;
 	}
 	ret = _apcie_icc_cmd(icc_sc, major, minor, data, length, reply, reply_length,
 		       false);
+out_unlock:
 	mutex_unlock(&icc_mutex);
 	return ret;
 }
@@ -310,24 +322,24 @@ __maybe_unused void resetUsbPort(void)
 	u8 off = 0, on = 1;
 	u8 resp[20];
 	int ret;
-	
+
 	//Turn OFF Usb
 	ret = apcie_icc_cmd(5, 0x10, &off, sizeof(off), resp, 20);
-	printk("Turn OFF USB: ret=%d, reply %02x %02x %02x %02x", ret, resp[0], resp[1], resp[2], resp[3]);
-	if(ret < 0)
-	{
-		printk("Turn off USB failed!");
+	if (ret < 0) {
+		pr_err("icc: USB disable failed: %d\n", ret);
 		return;
 	}
-	
+	pr_debug("icc: USB disable ret=%d, reply %02x %02x %02x %02x\n",
+		 ret, resp[0], resp[1], resp[2], resp[3]);
+
 	//Turn ON Usb
 	ret = apcie_icc_cmd(5, 0x10, &on, sizeof(on), resp, 20);
-	printk("Turn ON USB: ret=%d, reply %02x %02x %02x %02x", ret, resp[0], resp[1], resp[2], resp[3]);
-	if(ret < 0)
-	{
-		printk("Turn on USB failed");
+	if (ret < 0) {
+		pr_err("icc: USB enable failed: %d\n", ret);
 		return;
 	}
+	pr_debug("icc: USB enable ret=%d, reply %02x %02x %02x %02x\n",
+		 ret, resp[0], resp[1], resp[2], resp[3]);
 }
 
 void resetBtWlan(void)
@@ -340,28 +352,19 @@ void resetBtWlan(void)
 
 	/* Get bt/wlan status */
 //	ret = apcie_icc_cmd(5, 1, NULL, 0, resp, 20);
-//	printk("BT/WLAN status: ret=%d, reply %02x %02x %02x %02x", ret, resp[0], resp[1], resp[2], resp[3]);
 
 	/** Turn off is done from linux-loader actually, if you want you can remove it from linux-loader and done it here **/
 	
 	//Turn OFF bt/wlan
-/*	ret = apcie_icc_cmd(5, 0, &off, sizeof(off), resp, 20);
-	printk("Turn OFF BT/WLAN: ret=%d, reply %02x %02x %02x %02x", ret, resp[0], resp[1], resp[2], resp[3]);
-	if(ret < 0)
-	{
-		printk("Turn off bt/wlan failed!");
-		return;
-	}
-*/
 
 	//Turn ON bt/wlan
 	ret = apcie_icc_cmd(5, 0, &on, sizeof(on), resp, 20);
-	printk("Turn ON BT/WLAN: ret=%d, reply %02x %02x %02x %02x", ret, resp[0], resp[1], resp[2], resp[3]);
-	if(ret < 0)
-	{
-		printk("Turn on bt/wlan failed");
+	if (ret < 0) {
+		pr_err("icc: BT/WLAN enable failed: %d\n", ret);
 		return;
 	}
+	pr_debug("icc: BT/WLAN enable ret=%d, reply %02x %02x %02x %02x\n",
+		 ret, resp[0], resp[1], resp[2], resp[3]);
 }
 
 void do_icc_init(void) {
@@ -381,19 +384,28 @@ void do_icc_init(void) {
 	int ret;
 	// test: get FW version
 	ret = apcie_icc_cmd(2, 6, NULL, 0, reply, 0x30);
-	printk("ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n", ret,
-		reply[0], reply[1], reply[2], reply[3],
-		reply[4], reply[5], reply[6], reply[7]);
+	if (ret < 0)
+		pr_err("icc: firmware query failed: %d\n", ret);
+	else
+		pr_debug("icc: firmware query ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			 ret, reply[0], reply[1], reply[2], reply[3],
+			 reply[4], reply[5], reply[6], reply[7]);
 	ret = apcie_icc_cmd(1, 0, &svc, 1, reply, 0x30);
-	printk("ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n", ret,
-		reply[0], reply[1], reply[2], reply[3],
-		reply[4], reply[5], reply[6], reply[7]);
+	if (ret < 0)
+		pr_err("icc: service init failed: %d\n", ret);
+	else
+		pr_debug("icc: service init ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			 ret, reply[0], reply[1], reply[2], reply[3],
+			 reply[4], reply[5], reply[6], reply[7]);
 
 	/* Set the LED to something nice */
 	ret = apcie_icc_cmd(9, 0x20, led_config, ARRAY_SIZE(led_config), reply, 0x30);
-	printk("ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n", ret,
-		reply[0], reply[1], reply[2], reply[3],
-		reply[4], reply[5], reply[6], reply[7]);
+	if (ret < 0)
+		pr_err("icc: LED init failed: %d\n", ret);
+	else
+		pr_debug("icc: LED init ret=%d, reply %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			 ret, reply[0], reply[1], reply[2], reply[3],
+			 reply[4], reply[5], reply[6], reply[7]);
 }
 
 static void icc_shutdown(void)
@@ -404,7 +416,7 @@ static void icc_shutdown(void)
 	if (apcie_status() != 1)
 		return;
 	apcie_icc_cmd(4, 1, command, sizeof(command), NULL, 0);
-	mdelay(3000);
+	msleep(3000);
 	WARN_ON(1);
 }
 
@@ -416,55 +428,93 @@ void icc_reboot(void)
 	if (apcie_status() != 1)
 		return;
 	apcie_icc_cmd(4, 1, command, sizeof(command), NULL, 0);
-	mdelay(3000);
+	msleep(3000);
 	WARN_ON(1);
 }
 
-static void *ioctl_tmp_buf = NULL;
+static void *ioctl_send_buf;
+static void *ioctl_reply_buf;
 
  static long icc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
  {
- 	int ret;
- 	void __user *uap = (void __user *)arg;
- 	switch (cmd) {
- 	case ICC_IOCTL_CMD: {
- 		struct icc_cmd cmd;
- 		int reply_len;
- 		ret = copy_from_user(&cmd, uap, sizeof(cmd));
- 		if (ret) {
- 			ret = -EFAULT;
- 			break;
- 		}
- 		ret = copy_from_user(ioctl_tmp_buf, cmd.data, cmd.length);
- 		if (ret) {
- 			ret = -EFAULT;
- 			break;
- 		}
- 		reply_len = apcie_icc_cmd(cmd.major, cmd.minor, ioctl_tmp_buf,
- 			cmd.length, ioctl_tmp_buf, cmd.reply_length);
- 		if (reply_len < 0) {
- 			ret = reply_len;
- 			break;
- 		}
- 		ret = copy_to_user(cmd.reply, ioctl_tmp_buf, cmd.reply_length);
- 		if (ret) {
- 			ret = -EFAULT;
- 			break;
- 		}
- 		ret = reply_len;
- 		} break;
- 	default:
- 		ret = -ENOENT;
- 		break;
- 	}
- 	return ret;
+	int ret;
+	void __user *uap = (void __user *)arg;
+
+	switch (cmd) {
+	case ICC_IOCTL_CMD: {
+		struct icc_cmd cmd;
+		void *reply_buf;
+		const void *send_buf;
+		int reply_len;
+		size_t reply_copy_len;
+
+		ret = copy_from_user(&cmd, uap, sizeof(cmd));
+		if (ret) {
+			ret = -EFAULT;
+			break;
+		}
+		if (cmd.length > ICC_MAX_PAYLOAD) {
+			ret = -E2BIG;
+			break;
+		}
+		if (cmd.reply_length > ICC_MAX_PAYLOAD) {
+			ret = -E2BIG;
+			break;
+		}
+		if (cmd.length && !cmd.data) {
+			ret = -EINVAL;
+			break;
+		}
+		if (cmd.reply_length && !cmd.reply) {
+			ret = -EINVAL;
+			break;
+		}
+
+		if (!ioctl_send_buf || !ioctl_reply_buf) {
+			ret = -ENODEV;
+			break;
+		}
+
+		mutex_lock(&icc_ioctl_mutex);
+		if (cmd.length &&
+		    copy_from_user(ioctl_send_buf, cmd.data, cmd.length)) {
+			ret = -EFAULT;
+			goto out_unlock_ioctl;
+		}
+
+		send_buf = cmd.length ? ioctl_send_buf : NULL;
+		reply_buf = cmd.reply_length ? ioctl_reply_buf : NULL;
+
+		reply_len = apcie_icc_cmd(cmd.major, cmd.minor, send_buf,
+			cmd.length, reply_buf, cmd.reply_length);
+		if (reply_len < 0) {
+			ret = reply_len;
+			goto out_unlock_ioctl;
+		}
+
+		reply_copy_len = min_t(size_t, cmd.reply_length, reply_len);
+		if (reply_copy_len &&
+		    copy_to_user(cmd.reply, reply_buf, reply_copy_len)) {
+			ret = -EFAULT;
+			goto out_unlock_ioctl;
+		}
+
+		ret = reply_len;
+out_unlock_ioctl:
+		mutex_unlock(&icc_ioctl_mutex);
+		break;
+	}
+	default:
+		ret = -ENOENT;
+		break;
+	}
+	return ret;
  }
 
  static const struct file_operations icc_fops = {
  	.owner = THIS_MODULE,
  	.unlocked_ioctl = icc_ioctl,
  };
-
 
 int apcie_icc_init(struct apcie_dev *sc)
 {
@@ -485,10 +535,13 @@ int apcie_icc_init(struct apcie_dev *sc)
 				APCIE_RGN_ICC_BASE, APCIE_RGN_ICC_SIZE,
 				"apcie.icc")) {
 		sc_err("icc: failed to request ICC register region\n");
-		return -EBUSY;
+		ret = -EBUSY;
+		goto put_mem_dev;
 	}
 
 	sc->icc.spm_base = pci_resource_start(mem_dev, 5) + APCIE_SPM_ICC_BASE;
+	pci_dev_put(mem_dev);
+	mem_dev = NULL;
 	if (!request_mem_region(sc->icc.spm_base, APCIE_SPM_ICC_SIZE,
 				"spm.icc")) {
 		sc_err("icc: failed to request ICC SPM region\n");
@@ -552,16 +605,31 @@ int apcie_icc_init(struct apcie_dev *sc)
 	do_icc_init();
 	pm_power_off = &icc_shutdown;
 
-	ioctl_tmp_buf = kzalloc(1 << 16, GFP_KERNEL);
- 	if (!ioctl_tmp_buf) {
- 		sc_err("icc: alloc ioctl_tmp_buf failed\n");
- 		goto done;
- 	}
- 	ret = register_chrdev(ICC_MAJOR, "icc", &icc_fops);
- 	if (ret) {
- 		sc_err("icc: register_chrdev failed: %d\n", ret);
- 		goto done;
- 	}
+	ioctl_send_buf = kzalloc(ICC_MAX_PAYLOAD, GFP_KERNEL);
+	if (!ioctl_send_buf) {
+		sc_warn("icc: alloc ioctl_send_buf failed, leaving /dev/icc disabled\n");
+		goto done;
+	}
+
+	ioctl_reply_buf = kzalloc(ICC_MAX_PAYLOAD, GFP_KERNEL);
+	if (!ioctl_reply_buf) {
+		sc_warn("icc: alloc ioctl_reply_buf failed, leaving /dev/icc disabled\n");
+		kfree(ioctl_send_buf);
+		ioctl_send_buf = NULL;
+		goto done;
+	}
+
+	ret = register_chrdev(0, "icc", &icc_fops);
+	if (ret) {
+		sc_warn("icc: register_chrdev failed: %d\n", ret);
+		kfree(ioctl_reply_buf);
+		kfree(ioctl_send_buf);
+		ioctl_reply_buf = NULL;
+		ioctl_send_buf = NULL;
+		goto done;
+	}
+	icc_major = ret;
+	icc_chrdev_registered = true;
  done:
 
 	return 0;
@@ -580,12 +648,24 @@ release_spm:
 release_icc:
 	release_mem_region(pci_resource_start(sc->pdev, 4) +
 			   APCIE_RGN_ICC_BASE, APCIE_RGN_ICC_SIZE);
+put_mem_dev:
+	if (mem_dev)
+		pci_dev_put(mem_dev);
 	return ret;
 }
 
 void apcie_icc_remove(struct apcie_dev *sc)
 {
 	sc_err("apcie_icc_remove: shouldn't normally be called\n");
+	if (icc_chrdev_registered) {
+		unregister_chrdev(icc_major, "icc");
+		icc_major = 0;
+		icc_chrdev_registered = false;
+	}
+	kfree(ioctl_reply_buf);
+	kfree(ioctl_send_buf);
+	ioctl_reply_buf = NULL;
+	ioctl_send_buf = NULL;
 	pm_power_off = NULL;
 	icc_pwrbutton_remove(sc);
 	icc_i2c_remove(sc);
