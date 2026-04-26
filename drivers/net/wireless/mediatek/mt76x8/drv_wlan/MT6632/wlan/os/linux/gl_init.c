@@ -76,6 +76,20 @@
 #include "gl_wext.h"
 #include "gl_cfg80211.h"
 #include "precomp.h"
+
+#ifdef CONFIG_X86_PS4
+#include <asm/ps4.h>
+#endif
+
+static bool mtk_wifi_is_ps4(void)
+{
+#ifdef CONFIG_X86_PS4
+	return apcie_status() >= 0;
+#else
+	return false;
+#endif
+}
+
 #if CFG_SUPPORT_AGPS_ASSIST
 #include "gl_kal.h"
 #endif
@@ -182,7 +196,7 @@ static PUINT_8 apucEepromName[] = {
 };
 #endif
 
-static int CFG80211_Suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
+static __maybe_unused int CFG80211_Suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
 {
 	DBGLOG(INIT, INFO, "CFG80211 suspend CB\n");
 
@@ -1998,7 +2012,7 @@ int set_p2p_mode_handler(struct net_device *netdev, PARAM_CUSTOM_P2P_SET_STRUCT_
 * \retval VOID
 */
 /*----------------------------------------------------------------------------*/
-static VOID wlanGetParseConfig(P_ADAPTER_T prAdapter)
+static __maybe_unused VOID wlanGetParseConfig(P_ADAPTER_T prAdapter)
 {
 	PUINT_8 pucConfigBuf;
 	UINT_32 u4ConfigReadLen;
@@ -2379,7 +2393,10 @@ static INT_32 wlanProbe(PVOID pvData, PVOID pvDriverData)
 
 		/* kalMemCopy(&prGlueInfo->rRegInfo, prRegInfo, sizeof(REG_INFO_T)); */
 
-		prRegInfo->u4PowerMode = CFG_INIT_POWER_SAVE_PROF;
+		if (mtk_wifi_is_ps4())
+			prRegInfo->u4PowerMode = ENUM_PSP_CONTINUOUS_ACTIVE;
+		else
+			prRegInfo->u4PowerMode = CFG_INIT_POWER_SAVE_PROF;
 #if 0
 		prRegInfo->fgEnArpFilter = TRUE;
 #endif

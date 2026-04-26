@@ -61,7 +61,6 @@
 *    Wireless LAN Adapters.
 */
 
-
 /*******************************************************************************
 *                         C O M P I L E R   F L A G S
 ********************************************************************************
@@ -887,11 +886,9 @@ mtk_p2p_cfg80211_set_default_key(struct wiphy *wiphy,
 	DBGLOG(RSN, TRACE, "keyIdx = %d unicast = %d multicast = %d\n", key_index, unicast, multicast);
 #endif
 
-
 	/* For wep case, this set the key for tx */
 	if (p2pFuncRoleToBssIdx(prGlueInfo->prAdapter, ucRoleIdx, &rDefaultKey.ucBssIdx) != WLAN_STATUS_SUCCESS)
 		return -EINVAL;
-
 
 	rDefaultKey.ucKeyID = key_index;
 	rDefaultKey.ucUnicast = unicast;
@@ -909,10 +906,8 @@ mtk_p2p_cfg80211_set_default_key(struct wiphy *wiphy,
 			   wlanoidSetDefaultKey,
 			   &rDefaultKey, sizeof(PARAM_DEFAULT_KEY_T), FALSE, FALSE, TRUE, &u4BufLen);
 
-
 	if (rStatus == WLAN_STATUS_SUCCESS)
 		i4Rst = 0;
-
 
 	return i4Rst;
 }
@@ -1562,7 +1557,6 @@ static int mtk_p2p_cfg80211_start_radar_detection_impl(struct wiphy *wiphy, stru
 							sizeof(struct ieee80211_channel));
 		prGlueInfo->prP2PInfo[ucRoleIdx]->cac_time_ms = cac_time_ms;
 
-
 			mtk_p2p_cfg80211func_channel_format_switch(chandef, chandef->chan, &rRfChnlInfo);
 
 			p2pFuncSetChannel(prGlueInfo->prAdapter, ucRoleIdx, &rRfChnlInfo);
@@ -2101,7 +2095,7 @@ int mtk_p2p_cfg80211_cancel_remain_on_channel(struct wiphy *wiphy, struct wirele
 	P_MSG_P2P_CHNL_ABORT_T prMsgChnlAbort = (P_MSG_P2P_CHNL_ABORT_T) NULL;
 
 	do {
-		if ((wiphy == NULL) /* || (dev == NULL) */)
+		if (wiphy == NULL )
 			break;
 
 		prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
@@ -2432,7 +2426,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, st
 
 		prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
-
 		if (mtk_Netdev_To_RoleIdx(prGlueInfo, dev, &ucRoleIdx) < 0)
 			break;
 		/* prDisconnectMsg = (P_MSG_P2P_CONNECTION_ABORT_T)kalMemAlloc(sizeof(MSG_P2P_CONNECTION_ABORT_T),
@@ -2454,7 +2447,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, st
 		COPY_MAC_ADDR(prDisconnectMsg->aucTargetID, mac);
 		prDisconnectMsg->u2ReasonCode = REASON_CODE_UNSPECIFIED;
 		prDisconnectMsg->fgSendDeauth = TRUE;
-
 
 		mboxSendMsg(prGlueInfo->prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prDisconnectMsg, MSG_SEND_METHOD_BUF);
 
@@ -2484,7 +2476,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, co
 
 		prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
-
 		if (mtk_Netdev_To_RoleIdx(prGlueInfo, dev, &ucRoleIdx) < 0)
 			break;
 		/* prDisconnectMsg = (P_MSG_P2P_CONNECTION_ABORT_T)kalMemAlloc(sizeof(MSG_P2P_CONNECTION_ABORT_T),
@@ -2506,7 +2497,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, co
 		COPY_MAC_ADDR(prDisconnectMsg->aucTargetID, mac);
 		prDisconnectMsg->u2ReasonCode = REASON_CODE_UNSPECIFIED;
 		prDisconnectMsg->fgSendDeauth = TRUE;
-
 
 		mboxSendMsg(prGlueInfo->prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prDisconnectMsg, MSG_SEND_METHOD_BUF);
 
@@ -2537,7 +2527,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, u8
 
 		prGlueInfo = *((P_GLUE_INFO_T *) wiphy_priv(wiphy));
 
-
 		if (mtk_Netdev_To_RoleIdx(prGlueInfo, dev, &ucRoleIdx) < 0)
 			break;
 		/* prDisconnectMsg = (P_MSG_P2P_CONNECTION_ABORT_T)kalMemAlloc(sizeof(MSG_P2P_CONNECTION_ABORT_T),
@@ -2559,7 +2548,6 @@ int mtk_p2p_cfg80211_del_station(struct wiphy *wiphy, struct net_device *dev, u8
 		COPY_MAC_ADDR(prDisconnectMsg->aucTargetID, mac);
 		prDisconnectMsg->u2ReasonCode = REASON_CODE_UNSPECIFIED;
 		prDisconnectMsg->fgSendDeauth = TRUE;
-
 
 		mboxSendMsg(prGlueInfo->prAdapter, MBOX_ID_0, (P_MSG_HDR_T) prDisconnectMsg, MSG_SEND_METHOD_BUF);
 
