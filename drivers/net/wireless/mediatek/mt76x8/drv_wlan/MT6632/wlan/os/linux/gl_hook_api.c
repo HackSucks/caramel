@@ -2463,7 +2463,6 @@ INT_32 MT_ATERDDStop(struct net_device *prNetDev, UINT_8 *prInBuf)
 
 }
 
-
 /*----------------------------------------------------------------------------*/
 /*!
 * \brief  Hook API for Write Efuse.
@@ -2490,8 +2489,6 @@ INT_32 MT_ATEWriteEfuse(struct net_device *prNetDev, UINT_16 u2Offset, UINT_16 u
 	kalMemSet(&rAccessEfuseInfoRead, 0, sizeof(PARAM_CUSTOM_ACCESS_EFUSE_T));
 	kalMemSet(&rAccessEfuseInfoWrite, 0, sizeof(PARAM_CUSTOM_ACCESS_EFUSE_T));
 
-
-
 	/* Read */
 	DBGLOG(INIT, INFO, "MT6632 : QA_AGENT HQA_WriteBulkEEPROM  Read\n");
 	kalMemSet(&rAccessEfuseInfoRead, 0, sizeof(PARAM_CUSTOM_ACCESS_EFUSE_T));
@@ -2500,7 +2497,6 @@ INT_32 MT_ATEWriteEfuse(struct net_device *prNetDev, UINT_16 u2Offset, UINT_16 u
 				wlanoidQueryProcessAccessEfuseRead,
 				&rAccessEfuseInfoRead,
 				sizeof(PARAM_CUSTOM_ACCESS_EFUSE_T), TRUE, TRUE, TRUE, &u4BufLen);
-
 
 	/* Write */
 	kalMemSet(&rAccessEfuseInfoWrite, 0, sizeof(PARAM_CUSTOM_ACCESS_EFUSE_T));
@@ -2535,7 +2531,6 @@ INT_32 MT_ATEWriteEfuse(struct net_device *prNetDev, UINT_16 u2Offset, UINT_16 u
 	return i4Status;
 }
 
-
 /*----------------------------------------------------------------------------*/
 /*!
 * \brief  Hook API for Set Tx Target Power.
@@ -2558,7 +2553,6 @@ INT_32 MT_ATESetTxTargetPower(struct net_device *prNetDev, UINT_8 ucTxTargetPowe
 
 	prGlueInfo = *((P_GLUE_INFO_T *) netdev_priv(prNetDev));
 	kalMemSet(&rSetTxTargetPwr, 0, sizeof(PARAM_CUSTOM_SET_TX_TARGET_POWER_T));
-
 
 	/* Set Target Power Base */
 	DBGLOG(INIT, INFO, "MT6632 : QA_AGENT Set Tx Target Power= %x dbm\n", ucTxTargetPower);
@@ -3476,7 +3470,7 @@ INT_32 TxBfPfmuMemRelease(struct net_device *prNetDev, UINT_8 ucWlanId)
 	return i4Status;
 }
 
-INT_32 TxBfBssInfoUpdate(struct net_device *prNetDev, UINT_8 ucOwnMacIdx, UINT_8 ucBssIdx, UINT_8 ucBssId[MAC_ADDR_LEN]) /* Warning: defined but not used */
+static __maybe_unused INT_32 TxBfBssInfoUpdate(struct net_device *prNetDev, UINT_8 ucOwnMacIdx, UINT_8 ucBssIdx, UINT_8 ucBssId[MAC_ADDR_LEN])
 {
 	INT_32 i4Status = 0;
 	P_GLUE_INFO_T prGlueInfo = NULL;
