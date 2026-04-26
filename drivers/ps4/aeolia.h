@@ -5,6 +5,8 @@
 #include <linux/pci.h>
 #include <linux/i2c.h>
 
+struct apcie_msi_domain_ctx;
+
 enum aeolia_func_id {
 	AEOLIA_FUNC_ID_ACPI = 0,
 	AEOLIA_FUNC_ID_GBE,
@@ -142,21 +144,22 @@ struct apcie_icc_dev {
 struct apcie_dev {
 	struct pci_dev *pdev;
 	struct irq_domain *irqdomain;
+	struct apcie_msi_domain_ctx *msi_domain_ctx;
 	void __iomem *bar0;
 	void __iomem *bar2;
 	void __iomem *bar4;
 
 	int nvec;
-	int8_t irq_map[100];
+	int irq_map[100];
 	int serial_line[2];
 	struct apcie_icc_dev icc;
 };
 
-#define sc_err(...) dev_info(&sc->pdev->dev, __VA_ARGS__)
-#define sc_warn(...) dev_info(&sc->pdev->dev, __VA_ARGS__)
-#define sc_notice(...) dev_info(&sc->pdev->dev, __VA_ARGS__)
+#define sc_err(...) dev_err(&sc->pdev->dev, __VA_ARGS__)
+#define sc_warn(...) dev_warn(&sc->pdev->dev, __VA_ARGS__)
+#define sc_notice(...) dev_notice(&sc->pdev->dev, __VA_ARGS__)
 #define sc_info(...) dev_info(&sc->pdev->dev, __VA_ARGS__)
-#define sc_dbg(...) dev_info(&sc->pdev->dev, __VA_ARGS__)
+#define sc_dbg(...) dev_dbg(&sc->pdev->dev, __VA_ARGS__)
 
 static inline int apcie_irqnum(struct apcie_dev *sc, int index)
 {
