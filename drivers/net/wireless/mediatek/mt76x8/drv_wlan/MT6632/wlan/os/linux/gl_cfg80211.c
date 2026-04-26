@@ -78,6 +78,19 @@
 #include <linux/can/netlink.h>
 #include <net/netlink.h>
 #include <net/cfg80211.h>
+
+#ifdef CONFIG_X86_PS4
+#include <asm/ps4.h>
+#endif
+
+static bool mtk_wifi_is_ps4(void)
+{
+#ifdef CONFIG_X86_PS4
+	return apcie_status() >= 0;
+#else
+	return false;
+#endif
+}
 #include "gl_cfg80211.h"
 
 /*******************************************************************************
@@ -1437,6 +1450,9 @@ int mtk_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *ndev, bo
 	if (!prGlueInfo->prAdapter->prAisBssInfo)
 		return -EFAULT;
 
+	if (mtk_wifi_is_ps4())
+		enabled = false;
+
 	if (enabled) {
 		if (timeout == -1)
 			rPowerMode.ePowerMode = Param_PowerModeFast_PSP;
@@ -2643,7 +2659,7 @@ int mtk_cfg80211_assoc(struct wiphy *wiphy, struct net_device *ndev, struct cfg8
 
 #if CFG_SUPPORT_NFC_BEAM_PLUS
 
-static int mtk_cfg80211_testmode_get_scan_done(IN struct wiphy *wiphy, IN void *data, IN int len, IN P_GLUE_INFO_T prGlueInfo)
+static __maybe_unused int mtk_cfg80211_testmode_get_scan_done(IN struct wiphy *wiphy, IN void *data, IN int len, IN P_GLUE_INFO_T prGlueInfo)
 {
 #define NL80211_TESTMODE_P2P_SCANDONE_INVALID 0
 #define NL80211_TESTMODE_P2P_SCANDONE_STATUS 1
@@ -3701,4 +3717,3 @@ int mtk_cfg80211_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
 	}
 	return 0;
 }
-
