@@ -1,27 +1,32 @@
 #!/usr/bin/env bash
 
 # PS4-Linux Strawberry Builder
-# Supports two PS4-focused build profiles and two LTO flavors:
+# Supports two PS4-focused build profiles, two LTO flavors, and an optional Baikal southbridge target:
 #   server  — headless/services, HZ=250, PREEMPT_VOLUNTARY, performance governor
 #   general — desktop/gaming, HZ=250, PREEMPT=y, BORE, schedutil/reflex
 #   ThinLTO / FullLTO selectable via lto=ThinLTO or lto=FullLTO
+#   southbridge=AeoliaBelize or southbridge=Baikal
 #
 # Usage:
 #   ./build.sh
 #   ./build.sh --option N
 #   ./build.sh --option N use=Server
 #   ./build.sh --option N lto=ThinLTO
-#   ./build.sh --option N use=General lto=FullLTO
+#   ./build.sh --option N southbridge=Baikal
+#   ./build.sh --option N use=General lto=FullLTO southbridge=Baikal
 #   ./build.sh --option 7             Show/switch build profile
 #   ./build.sh --option 8             Show/switch LTO flavor
+#   ./build.sh --option 9             Show/switch southbridge target
 
 set -euo pipefail
 
 OUTPUT_DIR="${PWD}/out"
 FIRMWARE_DIR="${PWD}/extra_firmware"
 FIRMWARE_URL_BASE="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main"
+REQUIRED_PS4_SD8797_FW="mrvl/sd8797_uapsta.bin"
 declare -A FIRMWARE_URL_OVERRIDES
 FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="useCustomFirmware" # Prevent download from upstream; use Orbis/Custom one
+#FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="f87c5b8dd547bcb434d5296ead3748241810c1d8" #sucks too
 #FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="f87c5b8dd547bcb434d5296ead3748241810c1d8" #sucks too
 # We need an older firmware version from ~2013-2016 for Aeolias' 8797 SDIO Chip, ideally the one that's used on the PS4 OS.
 # This version is the closest to that we have (besides the one packed in Orbis Torus (WiFi+BT) firmware).
@@ -34,20 +39,94 @@ export HOSTCFLAGS="-Wno-error=incompatible-pointer-types-discards-qualifiers"
 
 PROFILE="server"
 LTO_FLAVOR="thin"
+SOUTHBRIDGE="aeoliabelize"
 JOBS="$(nproc)"
 MAX_JOBS="$(nproc)"
 
 lto_label() {
     if [[ "$LTO_FLAVOR" == "full" ]]; then
         echo "FullLTO"
+    elif [[ "$LTO_FLAVOR" == "none" ]]; then
+        echo "NoLTO"
     else
         echo "ThinLTO"
+    fi
+}
+
+southbridge_display() {
+    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
+        echo "Baikal"
+    else
+        echo "Aeolia/Belize"
+    fi
+}
+
+southbridge_suffix() {
+    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
+        echo "-Baikal"
+    fi
+}
+
+ensure_extra_firmware_blob() {
+    local blob="$1"
+    local current=""
+
+    if grep -qE '^CONFIG_EXTRA_FIRMWARE=' .config; then
+        current="$(sed -n 's/^CONFIG_EXTRA_FIRMWARE="\(.*\)"/\1/p' .config)"
+    fi
+
+    case " ${current} " in
+        *" ${blob} "*)
+            ;;
+        *)
+            current="${current:+${current} }${blob}"
+            scripts/config --set-str CONFIG_EXTRA_FIRMWARE "${current}"
+            ;;
+    esac
+}
+
+config_has_extra_firmware_blob() {
+    local blob="$1"
+    local current=""
+
+    if grep -qE '^CONFIG_EXTRA_FIRMWARE=' .config; then
+        current="$(sed -n 's/^CONFIG_EXTRA_FIRMWARE="\(.*\)"/\1/p' .config)"
+    fi
+
+    case " ${current} " in
+        *" ${blob} "*)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+require_custom_firmware_blob() {
+    local blob="$1"
+    local path="${FIRMWARE_DIR}/${blob}"
+
+    if [[ ! -f "${path}" ]]; then
+        echo -e "\e[1;31mERROR:\e[0m Required PS4 custom firmware is missing: ${path}" >&2
+        echo "Place the proprietary SD8797 firmware at ${path}" >&2
+        exit 1
+    fi
+}
+
+validate_extra_firmware_blob() {
+    local blob="$1"
+
+    if ! config_has_extra_firmware_blob "${blob}"; then
+        echo -e "\e[1;31mERROR:\e[0m CONFIG_EXTRA_FIRMWARE must include required PS4 custom firmware: ${blob}" >&2
+        exit 1
     fi
 }
 
 # Parse optional selectors in any position:
 #   use=Server/use=General
 #   lto=ThinLTO/lto=FullLTO
+#   southbridge=AeoliaBelize/southbridge=Baikal
+#   baikal=on/baikal=off
 for arg in "$@"; do
     case "$arg" in
         use=*)
@@ -61,13 +140,44 @@ for arg in "$@"; do
                     ;;
             esac
             ;;
+        southbridge=*|platform=*)
+            SOUTHBRIDGE_ARG="${arg#*=}"
+            case "${SOUTHBRIDGE_ARG,,}" in
+                aeolia|belize|aeoliabelize|aeolia/belize|base|default|legacy|nonbaikal)
+                    SOUTHBRIDGE="aeoliabelize"
+                    ;;
+                baikal)
+                    SOUTHBRIDGE="baikal"
+                    ;;
+                *)
+                    echo "Unknown southbridge target: ${SOUTHBRIDGE_ARG}. Valid: AeoliaBelize, Baikal"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        baikal=*)
+            BAIKAL_ARG="${arg#baikal=}"
+            case "${BAIKAL_ARG,,}" in
+                1|true|yes|y|on|enable|enabled)
+                    SOUTHBRIDGE="baikal"
+                    ;;
+                0|false|no|n|off|disable|disabled)
+                    SOUTHBRIDGE="aeoliabelize"
+                    ;;
+                *)
+                    echo "Unknown Baikal toggle: ${BAIKAL_ARG}. Valid: on/off"
+                    exit 1
+                    ;;
+            esac
+            ;;
         lto=*)
             LTO_ARG="${arg#lto=}"
             case "${LTO_ARG,,}" in
                 thinlto|thin) LTO_FLAVOR="thin" ;;
                 fulllto|full) LTO_FLAVOR="full" ;;
+                none|no|off|disabled) LTO_FLAVOR="none" ;;
                 *)
-                    echo "Unknown LTO flavor: ${LTO_ARG}. Valid: ThinLTO, FullLTO"
+                    echo "Unknown LTO flavor: ${LTO_ARG}. Valid: ThinLTO, FullLTO, none"
                     exit 1
                     ;;
             esac
@@ -103,6 +213,15 @@ if [[ $# -ge 2 && "$1" == "--option" ]]; then
             fi
             exit 0
             ;;
+        9)
+            echo "Current southbridge target: $(southbridge_display)"
+            read -r -p "Switch southbridge target? (y/n): " SWITCH
+            if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
+                [[ "$SOUTHBRIDGE" == "aeoliabelize" ]] && SOUTHBRIDGE="baikal" || SOUTHBRIDGE="aeoliabelize"
+                echo "Southbridge target switched to: $(southbridge_display)"
+            fi
+            exit 0
+            ;;
         *)
             echo "Invalid --option argument: $CHOICE"
             exit 1
@@ -127,9 +246,10 @@ if [[ "$SKIP_MENU" == "0" ]]; then
         echo -e "\e[1;35m║\e[0m \e[1;32m6)\e[0m Build profile: \e[1;33m${PROFILE}\e[0m$(printf "%-22s" "")\e[1;35m║\e[0m"
         echo -e "\e[1;35m║\e[0m \e[1;36m7)\e[0m Show/switch build profile                      \e[1;35m║\e[0m"
         echo -e "\e[1;35m║\e[0m \e[1;32m8)\e[0m Build LTO: \e[1;33m$(printf "%-31s" "$(lto_label)")\e[0m \e[1;35m║\e[0m"
+        echo -e "\e[1;35m║\e[0m \e[1;32m9)\e[0m Southbridge: \e[1;33m$(printf "%-25s" "$(southbridge_display)")\e[0m \e[1;35m║\e[0m"
         echo -e "\e[1;35m╚══════════════════════════════════════════════════╝\e[0m"
         echo ""
-        read -r -p "Select option [1-8]: " CHOICE
+        read -r -p "Select option [1-9]: " CHOICE
 
         case "$CHOICE" in
             1) DO_BUILD=1; DO_FETCH=0; break ;;
@@ -183,6 +303,16 @@ if [[ "$SKIP_MENU" == "0" ]]; then
                     sleep 1
                 fi
                 ;;
+            9)
+                echo ""
+                echo "Current southbridge target: $(southbridge_display)"
+                read -r -p "Switch southbridge target? (y/n): " SWITCH
+                if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
+                    [[ "$SOUTHBRIDGE" == "aeoliabelize" ]] && SOUTHBRIDGE="baikal" || SOUTHBRIDGE="aeoliabelize"
+                    echo "Southbridge target switched to: $(southbridge_display)"
+                    sleep 1
+                fi
+                ;;
             *)
                 echo -e "\e[1;31m[!] Invalid option.\e[0m"
                 sleep 1
@@ -207,10 +337,16 @@ fi
 if [[ -f config ]]; then
     echo -e "\e[1;34m[*]\e[0m Moving 'config' -> '.config'"
     mv config .config
-else
-    echo -e "\e[1;31mERROR:\e[0m No .config found." >&2
+elif [[ ! -f .config ]]; then
+    echo -e "\e[1;31mERROR:\e[0m No .config or 'config' found." >&2
     exit 1
 fi
+
+ensure_extra_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
+require_custom_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
+validate_extra_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
+echo -e "\e[1;34m[*]\e[0m Setting CONFIG_EXTRA_FIRMWARE_DIR=${FIRMWARE_DIR}"
+scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR "${FIRMWARE_DIR}"
 
 if [[ "$DO_FETCH" == "1" ]]; then
     CONFIG_LINE="$(grep -E '^CONFIG_EXTRA_FIRMWARE=' .config 2>/dev/null || true)"
@@ -238,25 +374,25 @@ if [[ "$DO_FETCH" == "1" ]]; then
             mkdir -p "$(dirname "${dest}")"
             echo -e "  \e[1;34m[↓]\e[0m Fetching: ${blob}"
 
-            FIRMWARE_URL="${FIRMWARE_URL_BASE}"
-            FIRMWARE_URL_FALLBACK=""
+            FIRMWARE_URL="${FIRMWARE_URL_BASE}/${blob}"
 
             if [[ -n "${FIRMWARE_URL_OVERRIDES[$blob]:-}" ]]; then
-                if [[ ${FIRMWARE_URL_OVERRIDES[$blob]} == "useCustomFirmware" ]]; then
+                OVERRIDE="${FIRMWARE_URL_OVERRIDES[$blob]}"
+                if [[ "${OVERRIDE}" == "useCustomFirmware" ]]; then
                     echo -e "  \e[1;31mERROR:\e[0m Requested custom built-in firmware for ${blob}, but it was not found in build directory.\n"\
                             " Please ensure the proper firmware exists in ${FIRMWARE_DIR}/${blob} . Exiting with error." >&2
                     exit 1
                 fi
-                COMMIT="${FIRMWARE_URL_OVERRIDES[$blob]}"
-                FIRMWARE_URL_FALLBACK="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/${COMMIT}"
+                
+                if [[ "${OVERRIDE}" == http* ]]; then
+                    FIRMWARE_URL="${OVERRIDE}"
+                else
+                    FIRMWARE_URL="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/${OVERRIDE}/${blob}"
+                fi
+                echo -e "  \e[1;33m[!] Using override URL for ${blob}:\e[0m\n      ${FIRMWARE_URL}"
             fi
 
-            if [[ -n "${FIRMWARE_URL_FALLBACK}" ]]; then
-                FIRMWARE_URL="${FIRMWARE_URL_FALLBACK}"
-                echo -e '  \e[1;33m[!] Using non-default firmware for '${blob}'!\n  Using commit from '${FIRMWARE_URL}''
-            fi
-
-            if curl -fsSL --retry 3 --retry-delay 2 "${FIRMWARE_URL}/${blob}" -o "${dest}"; then
+            if curl -fsSL --retry 3 --retry-delay 2 "${FIRMWARE_URL}" -o "${dest}"; then
                 echo -e "  \e[1;32m[✓]\e[0m ${blob}"
             else
                 echo -e "  \e[1;31m[✗]\e[0m FAILED: ${blob}" >&2
@@ -279,13 +415,17 @@ fi
 if [[ "$DO_BUILD" == "1" ]]; then
     echo -e "\e[1;34m[*]\e[0m Applying invariant config..."
 
-    LOCALVERSION_SUFFIX="-Strawberry-$(lto_label)-"
+    LOCALVERSION_SUFFIX="-Strawberry-$(lto_label)$(southbridge_suffix)-"
 
     # Build system / LTO
     if [[ "$LTO_FLAVOR" == "full" ]]; then
         echo -e "\e[1;34m[*]\e[0m Enabling FullLTO..."
         scripts/config --disable CONFIG_LTO_CLANG_THIN
         scripts/config --enable  CONFIG_LTO_CLANG_FULL
+    elif [[ "$LTO_FLAVOR" == "none" ]]; then
+        echo -e "\e[1;34m[*]\e[0m Disabling LTO..."
+        scripts/config --disable CONFIG_LTO_CLANG_THIN
+        scripts/config --disable CONFIG_LTO_CLANG_FULL
     else
         echo -e "\e[1;34m[*]\e[0m Enabling ThinLTO..."
         scripts/config --enable  CONFIG_LTO_CLANG_THIN
@@ -316,6 +456,13 @@ if [[ "$DO_BUILD" == "1" ]]; then
 
     # PS4 firmware
     scripts/config --enable  CONFIG_PS4_DMI_SPOOF
+    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
+        echo -e "\e[1;34m[*]\e[0m Enabling Baikal southbridge support..."
+        scripts/config --enable  CONFIG_X86_PS4_BAIKAL
+    else
+        echo -e "\e[1;34m[*]\e[0m Disabling Baikal southbridge support..."
+        scripts/config --disable CONFIG_X86_PS4_BAIKAL
+    fi
 
     # Memory management / cgroup base
     scripts/config --enable  CONFIG_CGROUPS
@@ -429,6 +576,7 @@ if [[ "$DO_BUILD" == "1" ]]; then
     scripts/config --disable CONFIG_HARDENED_USERCOPY_DEFAULT_ON
     scripts/config --disable CONFIG_SECURITY_DMESG_RESTRICT
     scripts/config --disable CONFIG_IOMMU_DEFAULT_DMA_STRICT
+    scripts/config --disable CONFIG_IOMMU_DEFAULT_PASSTHROUGH
     scripts/config --enable  CONFIG_IOMMU_DEFAULT_DMA_LAZY
 
     # I/O schedulers
@@ -564,21 +712,17 @@ if [[ "$DO_BUILD" == "1" ]]; then
         scripts/config --set-str CONFIG_DEFAULT_NET_SCH "fq_codel"
     fi
 
-    if [[ -d "${FIRMWARE_DIR}" ]] && [[ -n "$(ls -A "${FIRMWARE_DIR}" 2>/dev/null)" ]]; then
-        echo -e "\e[1;34m[*]\e[0m Setting CONFIG_EXTRA_FIRMWARE_DIR=${FIRMWARE_DIR}"
-        scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR "${FIRMWARE_DIR}"
-    else
-        echo -e "\e[1;33m[!]\e[0m WARNING: extra_firmware/ missing or empty -- run fetch firmware first." >&2
-    fi
-
     echo -e "\e[1;34m[*]\e[0m Running olddefconfig..."
     make "${MAKE_OPTS[@]}" olddefconfig
+
+    validate_extra_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
 
     echo -e "\e[1;34m[*]\e[0m Running prepare..."
     make "${MAKE_OPTS[@]}" prepare
 
     CURRENT_LTO_LABEL="$(lto_label)"
-    echo -e "\e[1;34m[*]\e[0m Building bzImage [profile: ${PROFILE}, LTO: ${CURRENT_LTO_LABEL}] with ${JOBS} jobs..."
+    CURRENT_SOUTHBRIDGE_DISPLAY="$(southbridge_display)"
+    echo -e "\e[1;34m[*]\e[0m Building bzImage [profile: ${PROFILE}, LTO: ${CURRENT_LTO_LABEL}, southbridge: ${CURRENT_SOUTHBRIDGE_DISPLAY}] with ${JOBS} jobs..."
     time make "${MAKE_OPTS[@]}" bzImage
 
     BZIMAGE="arch/x86/boot/bzImage"
@@ -599,18 +743,19 @@ if [[ "$DO_BUILD" == "1" ]]; then
         PROFILE_LABEL="General"
     fi
 
+    SOUTHBRIDGE_SUFFIX="$(southbridge_suffix)"
     KVER_BASE="${KVER%%-*}"
     RELEASE_TRACK="Mainline"
     if [[ "$KVER_BASE" == 6.18.* ]]; then
         RELEASE_TRACK="LTS"
     fi
 
-    ARTIFACT_BASENAME="Strawberry-${LTO_LABEL}-${PROFILE_LABEL}-${RELEASE_TRACK}-${KVER}"
+    ARTIFACT_BASENAME="Strawberry-${LTO_LABEL}-${PROFILE_LABEL}${SOUTHBRIDGE_SUFFIX}-${RELEASE_TRACK}-${KVER}"
     printf '%s\n' "${ARTIFACT_BASENAME}" > "${OUTPUT_DIR}/artifact_name.txt"
 
     echo ""
     echo -e "\e[1;32m╔══════════════════════════════════════════════════╗\e[0m"
-    echo -e "\e[1;32m║\e[0m  Build complete! [${PROFILE} / ${LTO_LABEL}]$(printf "%-13s" "")\e[1;32m║\e[0m"
+    echo -e "\e[1;32m║\e[0m  Build complete! [${PROFILE} / ${LTO_LABEL} / ${CURRENT_SOUTHBRIDGE_DISPLAY}]$(printf "%-2s" "")\e[1;32m║\e[0m"
     echo -e "\e[1;32m║\e[0m  Kernel : $(printf "%-39s" "${KVER}")\e[1;32m║\e[0m"
     echo -e "\e[1;32m║\e[0m  bzImage: $(printf "%-39s" "${OUTPUT_DIR}/bzImage")\e[1;32m║\e[0m"
     echo -e "\e[1;32m╚══════════════════════════════════════════════════╝\e[0m"
