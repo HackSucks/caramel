@@ -28,6 +28,7 @@
 #include <asm/x86_init.h>
 #include <asm/io_apic.h>
 #include <asm/irq_remapping.h>
+#include <asm/processor.h>
 #include <asm/set_memory.h>
 #include <asm/sev.h>
 
@@ -934,7 +935,6 @@ static int iommu_ga_log_enable(struct amd_iommu *iommu)
 	writel(0x00, iommu->mmio_base + MMIO_GA_HEAD_OFFSET);
 	writel(0x00, iommu->mmio_base + MMIO_GA_TAIL_OFFSET);
 
-
 	iommu_feature_enable(iommu, CONTROL_GAINT_EN);
 	iommu_feature_enable(iommu, CONTROL_GALOG_EN);
 
@@ -1455,7 +1455,6 @@ static int __init init_iommu_from_acpi(struct amd_iommu *iommu,
 	u32 ivhd_size;
 	int ret;
 
-
 	ret = add_early_maps();
 	if (ret)
 		return ret;
@@ -1479,7 +1478,6 @@ static int __init init_iommu_from_acpi(struct amd_iommu *iommu,
 	p += ivhd_size;
 
 	end += h->length;
-
 
 	while (p < end) {
 		e = (struct ivhd_entry *)p;
@@ -1963,10 +1961,19 @@ static int __init init_iommu_one_late(struct amd_iommu *iommu)
 
 	init_translation_status(iommu);
 	if (translation_pre_enabled(iommu) && !is_kdump_kernel()) {
-		iommu_disable(iommu);
-		clear_translation_pre_enabled(iommu);
-		pr_warn("Translation was enabled for IOMMU:%d but we are not in kdump mode\n",
-			iommu->index);
+#ifdef CONFIG_X86_PS4_BAIKAL
+		if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
+		    boot_cpu_data.x86 == 0x16) {
+			pr_info("AMD-Vi: PS4 Baikal: IOMMU:%d pre-enabled, preserving state\n",
+				iommu->index);
+		} else
+#endif
+		{
+			iommu_disable(iommu);
+			clear_translation_pre_enabled(iommu);
+			pr_warn("Translation was enabled for IOMMU:%d but we are not in kdump mode\n",
+				iommu->index);
+		}
 	}
 	if (amd_iommu_pre_enabled)
 		amd_iommu_pre_enabled = translation_pre_enabled(iommu);
@@ -2385,7 +2392,6 @@ union intcapxt {
 	};
 } __attribute__ ((packed));
 
-
 static struct irq_chip intcapxt_controller;
 
 static int intcapxt_irqdomain_activate(struct irq_domain *domain,
@@ -2398,7 +2404,6 @@ static void intcapxt_irqdomain_deactivate(struct irq_domain *domain,
 					  struct irq_data *irqd)
 {
 }
-
 
 static int intcapxt_irqdomain_alloc(struct irq_domain *domain, unsigned int virq,
 				    unsigned int nr_irqs, void *arg)
@@ -2431,7 +2436,6 @@ static void intcapxt_irqdomain_free(struct irq_domain *domain, unsigned int virq
 	irq_domain_free_irqs_top(domain, virq, nr_irqs);
 }
 
-
 static void intcapxt_unmask_irq(struct irq_data *irqd)
 {
 	struct amd_iommu *iommu = irqd->chip_data;
@@ -2453,7 +2457,6 @@ static void intcapxt_mask_irq(struct irq_data *irqd)
 
 	writeq(0, iommu->mmio_base + irqd->hwirq);
 }
-
 
 static int intcapxt_set_affinity(struct irq_data *irqd,
 				 const struct cpumask *mask, bool force)
@@ -2489,7 +2492,6 @@ static const struct irq_domain_ops intcapxt_domain_ops = {
 	.activate		= intcapxt_irqdomain_activate,
 	.deactivate		= intcapxt_irqdomain_deactivate,
 };
-
 
 static struct irq_domain *iommu_irqdomain;
 
@@ -3311,6 +3313,13 @@ static int __init early_amd_iommu_init(void)
 	}
 
 	/* Disable any previously enabled IOMMUs */
+#ifdef CONFIG_X86_PS4_BAIKAL
+	if (amd_iommu_pre_enabled &&
+	    boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
+	    boot_cpu_data.x86 == 0x16) {
+		pr_info("AMD-Vi: PS4 Baikal: keeping IOMMU enabled to preserve IR tables\n");
+	} else
+#endif
 	if (!is_kdump_kernel() || amd_iommu_disabled)
 		disable_iommus();
 
@@ -3704,6 +3713,12 @@ static bool amd_iommu_sme_check(void)
 void __init amd_iommu_detect(void)
 {
 	int ret;
+
+#ifdef CONFIG_X86_PS4_BAIKAL
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
+	    boot_cpu_data.x86 == 0x16)
+		goto disable_snp;
+#endif
 
 	if (no_iommu || (iommu_detected && !gart_iommu_aperture))
 		goto disable_snp;
