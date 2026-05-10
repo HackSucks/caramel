@@ -3211,6 +3211,21 @@ static bool quirks_force_identity_mapping(struct pci_dev *pdev)
 	return true;
 }
 
+#ifdef CONFIG_X86_PS4_BAIKAL
+static bool amd_iommu_ps4_baikal_force_identity(struct device *dev)
+{
+	struct pci_dev *pdev;
+
+	if (!dev_is_pci(dev))
+		return false;
+
+	pdev = to_pci_dev(dev);
+	return pdev->vendor == PCI_VENDOR_ID_SONY &&
+	       pdev->device >= PCI_DEVICE_ID_SONY_BAIKAL_ACPI &&
+	       pdev->device <= PCI_DEVICE_ID_SONY_BAIKAL_XHCI;
+}
+#endif
+
 static int amd_iommu_def_domain_type(struct device *dev)
 {
 	struct iommu_dev_data *dev_data;
@@ -3225,6 +3240,13 @@ static int amd_iommu_def_domain_type(struct device *dev)
 	/* Always use DMA domain for untrusted device */
 	if (to_pci_dev(dev)->untrusted)
 		return IOMMU_DOMAIN_DMA;
+
+#ifdef CONFIG_X86_PS4_BAIKAL
+	if (amd_iommu_ps4_baikal_force_identity(dev) &&
+	    !cc_platform_has(CC_ATTR_MEM_ENCRYPT) &&
+	    !amd_iommu_snp_en)
+		return IOMMU_DOMAIN_IDENTITY;
+#endif
 
 	/* Apply device specific quirks */
 	if (quirks_force_identity_mapping(to_pci_dev(dev))) {
@@ -4037,12 +4059,9 @@ static int irq_remapping_select(struct irq_domain *d, struct irq_fwspec *fwspec,
 		devid = get_ioapic_devid(fwspec->param[0]);
 	else if (x86_fwspec_is_hpet(fwspec))
 		devid = get_hpet_devid(fwspec->param[0]);
-	else if(x86_fwspec_is_aeolia(fwspec))
-		devid = fwspec->param[0];
 
 	if (devid < 0)
 		return 0;
-	pr_err("Remapping Selected: %x\n", devid);
 	iommu = __rlookup_amd_iommu((devid >> 16), (devid & 0xffff));
 
 	return iommu && iommu->ir_domain == d;
