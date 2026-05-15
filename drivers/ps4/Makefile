@@ -12,3 +12,4 @@ obj-$(CONFIG_X86_PS4_BAIKAL) += ps4-bpcie.o \
     ps4-bpcie-icc.o
 obj-y += ps4-led.o
 obj-y += ps4-fan.o
+obj-y += ps4-buzzer.o
