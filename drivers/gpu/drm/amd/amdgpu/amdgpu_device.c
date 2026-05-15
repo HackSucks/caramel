@@ -962,6 +962,10 @@ static int amdgpu_device_asic_init(struct amdgpu_device *adev)
 	int ret;
 
 	amdgpu_asic_pre_asic_init(adev);
+
+	if (adev->asic_type == CHIP_LIVERPOOL ||
+	    adev->asic_type == CHIP_GLADIUS)
+		return 0;
 	flags = amdgpu_device_get_vbios_flags(adev);
 	optional = !!(flags & (AMDGPU_VBIOS_OPTIONAL | AMDGPU_VBIOS_SKIP));
 
@@ -2355,7 +2359,6 @@ static int amdgpu_device_init_schedulers(struct amdgpu_device *adev)
 
 	return 0;
 }
-
 
 /**
  * amdgpu_device_ip_init - run init for hardware IPs
@@ -5713,7 +5716,6 @@ static void amdgpu_device_gpu_resume(struct amdgpu_device *adev,
 
 	}
 }
-
 
 /**
  * amdgpu_device_gpu_recover - reset the asic and recover scheduler

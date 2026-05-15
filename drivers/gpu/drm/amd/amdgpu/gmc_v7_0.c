@@ -799,7 +799,6 @@ static void gmc_v7_0_vm_decode_fault(struct amdgpu_device *adev, u32 status,
 	       "write" : "read", block, mc_client, mc_id);
 }
 
-
 static const u32 mc_cg_registers[] = {
 	mmMC_HUB_MISC_HUB_CG,
 	mmMC_HUB_MISC_SIP_CG,
@@ -1003,6 +1002,9 @@ static int gmc_v7_0_sw_init(struct amdgpu_ip_block *ip_block)
 
 	if (adev->flags & AMD_IS_APU) {
 		adev->gmc.vram_type = AMDGPU_VRAM_TYPE_UNKNOWN;
+		if (adev->asic_type == CHIP_LIVERPOOL ||
+		    adev->asic_type == CHIP_GLADIUS)
+			adev->gmc.vram_type = AMDGPU_VRAM_TYPE_GDDR5;
 	} else {
 		u32 tmp = RREG32(mmMC_SEQ_MISC0);
 
@@ -1057,9 +1059,7 @@ static int gmc_v7_0_sw_init(struct amdgpu_ip_block *ip_block)
 	if (r)
 		return r;
 
-
 	dev_info(adev->dev, "Done gart\n");
-
 
 	/*
 	 * number of VMs
