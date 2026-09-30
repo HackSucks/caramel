@@ -934,12 +934,12 @@ static const u32 liverpool_mgcg_cgcg_init[] =
 	0x1579, 0xff607fff, 0xfc000100, /* CGTT_DRM_CLK_CTRL0 */
 };
 
-static const u32 gladius_golden_spm_registers[] =
+static const u32 gladius_golden_spm_registers[] __maybe_unused =
 {
 	0xc200, 0xe0ffffff, 0xe0000000 	/* mmGRBM_GFX_INDEX */
 };
 
-static const u32 gladius_golden_common_registers[] =
+static const u32 gladius_golden_common_registers[] __maybe_unused =
 {
 	0xc200, 0xffffffff, 0xe0000000, /* mmGRBM_GFX_INDEX */
 	0xa0d4, 0xffffffff, 0x2a00161a, /* PA_SC_RASTER_CONFIG */
@@ -948,7 +948,7 @@ static const u32 gladius_golden_common_registers[] =
 	0x263e, 0xffffffff, 0x12011003, /* mmGB_ADDR_CONFIG */
 };
 
-static const u32 gladius_golden_registers[] =
+static const u32 gladius_golden_registers[] __maybe_unused =
 {	
 	0xf000, 0xffff1fff, 0x96940200, /* CGTS_SM_CTRL_REG */
 	0xf003, 0xffff0001, 0xff000000, /* CGTS_TCC_DISABLE */
@@ -986,7 +986,7 @@ static const u32 gladius_golden_registers[] =
 	0x535, 0xffffffff, 0x00000000, 	/* VM_CONTEXTS_DISABLE */
 };
 
-static const u32 gladius_mgcg_cgcg_init[] =
+static const u32 gladius_mgcg_cgcg_init[] __maybe_unused =
 {
 	0x3108, 0xffffffff, 0xfffffffc, /* RLC_CGTT_MGCG_OVERRIDE */
 	0xc200, 0xffffffff, 0xe0000000, /* GRBM_GFX_INDEX */
@@ -1231,18 +1231,12 @@ static void cik_init_golden_registers(struct amdgpu_device *adev)
 						 ARRAY_SIZE(liverpool_golden_spm_registers));
 		break;
 	case CHIP_GLADIUS:
-		amdgpu_device_program_register_sequence(adev,
-						 gladius_mgcg_cgcg_init,
-						 ARRAY_SIZE(gladius_mgcg_cgcg_init));
-		amdgpu_device_program_register_sequence(adev,
-						 gladius_golden_registers,
-						 ARRAY_SIZE(gladius_golden_registers));
-		amdgpu_device_program_register_sequence(adev,
-						 gladius_golden_common_registers,
-						 ARRAY_SIZE(gladius_golden_common_registers));
-		amdgpu_device_program_register_sequence(adev,
-						 gladius_golden_spm_registers,
-						 ARRAY_SIZE(gladius_golden_spm_registers));
+		/*
+		 * The arrays above are the old Liverpool/Hawaii clone,
+		 * including TCP_CHAN_STEER_LO 0x76325410 and HDP_ADDR_CONFIG
+		 * 0x12010001. Those writes drop Gladius acceleration.
+		 * gfx_v7_0_init_golden_registers() is the Neo path.
+		 */
 		break;
 	default:
 		break;
