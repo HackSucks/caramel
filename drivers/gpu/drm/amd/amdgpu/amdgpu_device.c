@@ -4914,6 +4914,16 @@ bool amdgpu_device_should_recover_gpu(struct amdgpu_device *adev)
 	if (amdgpu_gpu_recovery == 0)
 		goto disabled;
 
+	/*
+	 * No RAS poison on PS4 APUs, so the next check would return
+	 * true and skip the CIK auto-off list. Decide first. Recovery
+	 * resume re-enters the SMU program (gladius_spll_911).
+	 */
+	if (amdgpu_gpu_recovery == -1 &&
+	    (adev->asic_type == CHIP_LIVERPOOL ||
+	     adev->asic_type == CHIP_GLADIUS))
+		goto disabled;
+
 	/* Skip soft reset check in fatal error mode */
 	if (!amdgpu_ras_is_poison_mode_supported(adev))
 		return true;
@@ -4934,6 +4944,8 @@ bool amdgpu_device_should_recover_gpu(struct amdgpu_device *adev)
 		case CHIP_KAVERI:
 		case CHIP_KABINI:
 		case CHIP_MULLINS:
+		case CHIP_LIVERPOOL:
+		case CHIP_GLADIUS:
 #endif
 		case CHIP_CARRIZO:
 		case CHIP_STONEY:
