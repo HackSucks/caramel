@@ -45,6 +45,7 @@
 #include "gfx_v7_0.h"
 #include "cik_sdma.h"
 #include "liverpool_clk.h"
+#include "liverpool_smu.h"
 #include "uvd_v4_2.h"
 #include "vce_v2_0.h"
 #include "cik_dpm.h"
@@ -1819,6 +1820,14 @@ static int cik_set_uvd_clocks(struct amdgpu_device *adev, u32 vclk, u32 dclk)
 {
 	int r = 0;
 
+	/*
+	 * Liverpool/Gladius have no kv_smu/pp_smu block. Orbis clocks this
+	 * engine through the SAMU GCK proxy, not the CIK SMC_IND VCLK/DCLK
+	 * path below. A raw SMC_IND mailbox access powers a Baikal Pro off.
+	 */
+	if (adev->asic_type == CHIP_LIVERPOOL || adev->asic_type == CHIP_GLADIUS)
+		return 0;
+
 	r = cik_set_uvd_clock(adev, vclk, ixCG_VCLK_CNTL, ixCG_VCLK_STATUS);
 	if (r)
 		return r;
@@ -1832,6 +1841,10 @@ static int cik_set_vce_clocks(struct amdgpu_device *adev, u32 evclk, u32 ecclk)
 	int r, i;
 	struct atom_clock_dividers dividers;
 	u32 tmp;
+
+	/* Same raw SMC_IND landmine as cik_set_uvd_clocks(). */
+	if (adev->asic_type == CHIP_LIVERPOOL || adev->asic_type == CHIP_GLADIUS)
+		return 0;
 
 	r = amdgpu_atombios_get_clock_dividers(adev,
 					       COMPUTE_GPUCLK_INPUT_FLAG_DEFAULT_GPUCLK,
@@ -2550,7 +2563,8 @@ static int cik_common_early_init(struct amdgpu_ip_block *ip_block)
 	return 0;
 }
 
-static int cik_common_hw_init(struct amdgpu_ip_block *ip_block)
+/* Golden, ASPM, and reported clocks. No SPLL program. */
+static int cik_common_hw_init_no_smu(struct amdgpu_ip_block *ip_block)
 {
 	struct amdgpu_device *adev = ip_block->adev;
 
@@ -2564,16 +2578,27 @@ static int cik_common_hw_init(struct amdgpu_ip_block *ip_block)
 	else
 		cik_program_aspm(adev);
 
-	if (adev->asic_type == CHIP_LIVERPOOL ||
-	    adev->asic_type == CHIP_GLADIUS)
-		liverpool_clk_force_max(adev);
-
 	if (adev->asic_type == CHIP_LIVERPOOL) {
 		adev->clock.default_sclk = 80000;
 		adev->clock.default_mclk = 137500;
 	} else if (adev->asic_type == CHIP_GLADIUS) {
 		adev->clock.default_sclk = 91100;
 		adev->clock.default_mclk = 170000;
+	}
+
+	return 0;
+}
+
+static int cik_common_hw_init(struct amdgpu_ip_block *ip_block)
+{
+	struct amdgpu_device *adev = ip_block->adev;
+
+	cik_common_hw_init_no_smu(ip_block);
+
+	if (adev->asic_type == CHIP_LIVERPOOL ||
+	    adev->asic_type == CHIP_GLADIUS) {
+		liverpool_clk_force_max(adev);
+		liverpool_smu_sysfs_init(adev);
 	}
 
 	return 0;
@@ -2586,7 +2611,8 @@ static int cik_common_hw_fini(struct amdgpu_ip_block *ip_block)
 
 static int cik_common_resume(struct amdgpu_ip_block *ip_block)
 {
-	return cik_common_hw_init(ip_block);
+	/* First boot only: gladius_spll_911 / liverpool_clk_force_max. */
+	return cik_common_hw_init_no_smu(ip_block);
 }
 
 
