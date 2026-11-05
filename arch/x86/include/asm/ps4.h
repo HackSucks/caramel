@@ -36,6 +36,13 @@ extern void apcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
 
 typedef void (*bpcie_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
 				   u16 length);
+extern void ps4_samu_lock(void);
+extern void ps4_samu_unlock(void);
+extern void *ps4_samu_data(u64 *va, size_t *size);
+extern int ps4_samu_map(struct page **pages, unsigned int count, u64 *va);
+extern void ps4_samu_unmap(void);
+extern int ps4_samu_rng(void *buf, size_t len);
+extern int ps4_samu_ccp(void *op);
 extern int apcie_status(void);
 extern int apcie_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
