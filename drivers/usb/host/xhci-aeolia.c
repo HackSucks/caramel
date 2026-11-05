@@ -243,6 +243,8 @@ static int ahci_init_one(struct pci_dev *pdev)
 	if (!hpriv)
 		return -ENOMEM;
 	hpriv->flags |= (unsigned long)pi.private_data;
+	if (baikal)
+		hpriv->flags |= AHCI_HFLAG_NO_NCQ;
 
 	//hpriv->mmio = pcim_iomap_table(pdev)[ahci_pci_bar];
 	rsrc_start = pci_resource_start(pdev, ahci_pci_bar);
