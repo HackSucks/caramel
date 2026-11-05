@@ -34,15 +34,21 @@ extern unsigned long ps4_calibrate_tsc(void);
 extern int apcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void apcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
 
+typedef void (*bpcie_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
+				   u16 length);
 extern int apcie_status(void);
 extern int apcie_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
 #ifdef CONFIG_X86_PS4_BAIKAL
 extern int bpcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
+extern void bpcie_icc_reboot(void);
 extern int bpcie_status(void);
 extern int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
+extern int bpcie_icc_register_event_handler(u8 major, bpcie_icc_event_fn fn,
+					    void *ctx);
+extern void bpcie_icc_unregister_event_handler(u8 major);
 #else
 static inline int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
 {
@@ -60,11 +66,22 @@ static inline int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
 {
 	return -ENODEV;
 }
+static inline int bpcie_icc_register_event_handler(u8 major,
+						   bpcie_icc_event_fn fn,
+						   void *ctx)
+{
+	return -ENODEV;
+}
+static inline void bpcie_icc_unregister_event_handler(u8 major)
+{
+}
 #endif
 
 
 #else
 
+typedef void (*bpcie_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
+				   u16 length);
 static inline int apcie_assign_irqs(struct pci_dev *dev, int nvec)
 {
 	return -ENODEV;
@@ -96,6 +113,15 @@ static inline int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
 				u16 length, void *reply, u16 reply_length)
 {
 	return -ENODEV;
+}
+static inline int bpcie_icc_register_event_handler(u8 major,
+						   bpcie_icc_event_fn fn,
+						   void *ctx)
+{
+	return -ENODEV;
+}
+static inline void bpcie_icc_unregister_event_handler(u8 major)
+{
 }
 
 #endif
