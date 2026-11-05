@@ -1869,7 +1869,7 @@ CONFIG_PREVENT_FIRMWARE_BUILD=y
 CONFIG_FW_LOADER=y
 CONFIG_FW_LOADER_PAGED_BUF=y
 CONFIG_FW_LOADER_SYSFS=y
-CONFIG_EXTRA_FIRMWARE="mrvl/sd8897_uapsta.bin mediatek/mt7668pr2h.bin EEPROM_MT7668.bin EEPROM_MT7668_e1.bin mt7668_patch_e1_hdr.bin mt7668_patch_e2_hdr.bin TxPwrLimit_MT76x8.dat wifi.cfg WIFI_RAM_CODE2_SDIO_MT7668.bin WIFI_RAM_CODE2_USB_MT7668.bin WIFI_RAM_CODE_MT7668.bin mrvl/sd8797_uapsta.bin amdgpu/liverpool_ce.bin amdgpu/liverpool_me.bin amdgpu/liverpool_mec.bin amdgpu/liverpool_mec2.bin amdgpu/liverpool_pfp.bin amdgpu/liverpool_rlc.bin amdgpu/liverpool_sdma.bin amdgpu/liverpool_sdma1.bin amdgpu/gladius_ce.bin amdgpu/gladius_me.bin amdgpu/gladius_mec.bin amdgpu/gladius_mec2.bin amdgpu/gladius_pfp.bin amdgpu/gladius_rlc.bin amdgpu/gladius_sdma.bin amdgpu/gladius_sdma1.bin"
+CONFIG_EXTRA_FIRMWARE="mrvl/sd8897_uapsta.bin mediatek/mt7668pr2h.bin EEPROM_MT7668.bin EEPROM_MT7668_e1.bin mt7668_patch_e1_hdr.bin mt7668_patch_e2_hdr.bin TxPwrLimit_MT76x8.dat wifi.cfg WIFI_RAM_CODE2_SDIO_MT7668.bin WIFI_RAM_CODE2_USB_MT7668.bin WIFI_RAM_CODE_MT7668.bin mrvl/sd8797_uapsta.bin"
 CONFIG_EXTRA_FIRMWARE_DIR="extra_firmware"
 CONFIG_FW_LOADER_USER_HELPER=y
 # CONFIG_FW_LOADER_USER_HELPER_FALLBACK is not set
