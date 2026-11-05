@@ -48,7 +48,7 @@ enum bpcie_subfunc {
 	BPCIE_NUM_SUBFUNCS	= 32
 };
 
-#define BPCIE_NR_UARTS 2
+#define BPCIE_NR_UARTS 1
 
 #define BPCIE_RGN_CHIPID_BASE		0x4000
 #define BPCIE_RGN_CHIPID_SIZE		0x9000
@@ -163,6 +163,14 @@ int bpcie_is_compatible_device(struct pci_dev *dev);
 u32 glue_read32(struct bpcie_dev *sc, u32 offset);
 void glue_write32(struct bpcie_dev *sc, u32 offset, u32 value);
 int bpcie_uart_init(struct bpcie_dev *sc);
+#ifdef CONFIG_RTC_CLASS
+int bpcie_rtc_init(struct bpcie_dev *sc);
+#else
+static inline int bpcie_rtc_init(struct bpcie_dev *sc)
+{
+	return 0;
+}
+#endif
 void bpcie_uart_remove(struct bpcie_dev *sc);
 int bpcie_icc_init(struct bpcie_dev *sc);
 void bpcie_icc_remove(struct bpcie_dev *sc);

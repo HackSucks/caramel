@@ -18,7 +18,7 @@ int bpcie_uart_init(struct bpcie_dev *sc)
 		uint32_t off = BPCIE_RGN_UART_BASE + (i << 12);
 		memset(&uart, 0, sizeof(uart));
 		uart.port.irq		= bpcie_irqnum(sc, BPCIE_SUBFUNC_UART0 + i);
-		uart.port.uartclk	= 58500000;
+		uart.port.uartclk	= 25000000;
 		uart.port.flags		= UPF_SHARE_IRQ;
 		uart.port.iotype	= UPIO_MEM32;
 		uart.port.mapbase	= pci_resource_start(sc->pdev, 2) + off;
