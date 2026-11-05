@@ -10,6 +10,9 @@ obj-y += ps4-apcie.o \
 obj-$(CONFIG_X86_PS4_BAIKAL) += ps4-bpcie.o \
     ps4-bpcie-uart.o \
     ps4-bpcie-icc.o
+ifdef CONFIG_RTC_CLASS
+obj-$(CONFIG_X86_PS4_BAIKAL) += ps4-bpcie-rtc.o
+endif
 obj-y += ps4-led.o
 obj-y += ps4-fan.o
 obj-y += ps4-buzzer.o

@@ -451,13 +451,18 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 	if ((ret = bpcie_glue_init(sc)) < 0)
 		goto free_bars;
+	if (bpcie_uart_init(sc) < 0)
+		sc_err("uart not registered\n");
+	if (bpcie_rtc_init(sc) < 0)
+		sc_err("rtc not registered\n");
 	if ((ret = bpcie_icc_init(sc)) < 0)
-		goto remove_glue;
+		goto remove_uart;
 
 	WRITE_ONCE(bpcie_initialized, true);
 	return 0;
 
-remove_glue:
+remove_uart:
+	bpcie_uart_remove(sc);
 	bpcie_glue_remove(sc);
 free_bars:
 	if (sc->bar0)
@@ -478,6 +483,7 @@ static void bpcie_remove(struct pci_dev *dev) {
 
 	WRITE_ONCE(bpcie_initialized, false);
 	bpcie_icc_remove(sc);
+	bpcie_uart_remove(sc);
 	bpcie_glue_remove(sc);
 
 	if (sc->bar0)
@@ -496,6 +502,7 @@ static int bpcie_suspend(struct pci_dev *dev, pm_message_t state) {
 	sc = pci_get_drvdata(dev);
 
 	bpcie_icc_suspend(sc, state);
+	bpcie_uart_suspend(sc, state);
 	bpcie_glue_suspend(sc, state);
 	return 0;
 }
@@ -506,6 +513,7 @@ static int bpcie_resume(struct pci_dev *dev) {
 
 	bpcie_icc_resume(sc);
 	bpcie_glue_resume(sc);
+	bpcie_uart_resume(sc);
 	return 0;
 }
 #endif
