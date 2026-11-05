@@ -27,6 +27,7 @@
 
 #include <drm/drm_cache.h>
 #include "amdgpu.h"
+#include "ps4_samu_vm.h"
 #include "cikd.h"
 #include "cik.h"
 #include "gmc_v7_0.h"
@@ -673,6 +674,8 @@ static int gmc_v7_0_gart_enable(struct amdgpu_device *adev)
 	else
 		gmc_v7_0_set_fault_enable_default(adev, true);
 
+	ps4_samu_vm_enable(adev);
+
 	if (adev->asic_type == CHIP_KAVERI) {
 		tmp = RREG32(mmCHUB_CONTROL);
 		tmp &= ~BYPASS_VM;
@@ -1021,6 +1024,10 @@ static int gmc_v7_0_sw_init(struct amdgpu_ip_block *ip_block)
 	if (r)
 		return r;
 
+	r = ps4_samu_vm_init(adev);
+	if (r)
+		return r;
+
 	dev_info(adev->dev, "Done gart\n");
 
 	/*
@@ -1065,6 +1072,7 @@ static int gmc_v7_0_sw_fini(struct amdgpu_ip_block *ip_block)
 	amdgpu_gem_force_release(adev);
 	amdgpu_vm_manager_fini(adev);
 	kfree(adev->gmc.vm_fault_info);
+	ps4_samu_vm_fini(adev);
 	amdgpu_gart_table_vram_free(adev);
 	amdgpu_bo_fini(adev);
 	amdgpu_ucode_release(&adev->gmc.fw);
@@ -1236,6 +1244,7 @@ static int gmc_v7_0_process_interrupt(struct amdgpu_device *adev,
 
 	vmid = REG_GET_FIELD(status, VM_CONTEXT1_PROTECTION_FAULT_STATUS,
 			     VMID);
+	ps4_samu_vm_fault(adev, vmid, addr);
 	if (amdgpu_amdkfd_is_kfd_vmid(adev, vmid)
 		&& !atomic_read_acquire(&adev->gmc.vm_fault_info_updated)) {
 		struct kfd_vm_fault_info *info = adev->gmc.vm_fault_info;

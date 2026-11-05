@@ -615,6 +615,20 @@ config X86_PS4_BAIKAL
 	help
 	  Enable support for the Baikal southbridge used by PlayStation 4
 	  Slim and Pro systems.
+
+config PS4_CCP
+	bool "PS4 SAMU CCP hardware crypto engine"
+	depends on X86_PS4
+	depends on DRM_AMDGPU=y
+	help
+	  Enable the PS4 SAMU AES-XTS bulk storage crypto driver (ps4-ccp).
+
+config PS4_TRNG
+	bool "PS4 SAMU hardware random number generator"
+	depends on X86_PS4
+	depends on DRM_AMDGPU=y
+	help
+	  Enable the PS4 SAMU true random number generator driver (ps4-trng).
  
 config X86_VSMP
 	bool "ScaleMP vSMP"
