@@ -18,6 +18,10 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
+
+#ifdef CONFIG_X86_PS4
+#include <asm/ps4.h>
+#endif
 #include <linux/fs.h>
 
 #include "proc.h"
@@ -523,6 +527,15 @@ EXPORT_SYMBOL_GPL(irq_domain_create_legacy);
  * @fwspec: FW specifier for an interrupt
  * @bus_token: domain-specific data
  */
+static bool irq_select_on_any_bus(void)
+{
+#ifdef CONFIG_X86_PS4
+	return !ps4_is_baikal();
+#else
+	return false;
+#endif
+}
+
 struct irq_domain *irq_find_matching_fwspec(struct irq_fwspec *fwspec,
 					    enum irq_domain_bus_token bus_token)
 {
@@ -542,7 +555,7 @@ struct irq_domain *irq_find_matching_fwspec(struct irq_fwspec *fwspec,
 	 */
 	mutex_lock(&irq_domain_mutex);
 	list_for_each_entry(h, &irq_domain_list, link) {
-		if (h->ops->select && bus_token != DOMAIN_BUS_ANY)
+		if (h->ops->select && (bus_token != DOMAIN_BUS_ANY || irq_select_on_any_bus()))
 			rc = h->ops->select(h, fwspec, bus_token);
 		else if (h->ops->match)
 			rc = h->ops->match(h, to_of_node(fwnode), bus_token);

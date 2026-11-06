@@ -33,6 +33,7 @@
 #include <linux/semaphore.h>
 #include <linux/security.h>
 
+#include <asm/ps4.h>
 #include <asm/io.h>
 #include <linux/uaccess.h>
 #include <linux/io-64-nonatomic-lo-hi.h>
@@ -577,7 +578,7 @@ acpi_os_install_interrupt_handler(u32 gsi, acpi_osd_handler handler,
 	if (acpi_irq_handler)
 		return AE_ALREADY_ACQUIRED;
 
-	if (gsi == 9 && !boot_cpu_has(X86_FEATURE_HYPERVISOR) && boot_cpu_data.x86_vendor == X86_VENDOR_AMD && boot_cpu_data.x86 == 0x16) {
+	if (gsi == 9 && ps4_is_baikal()) {
 		pr_info("ACPI: Bypassing SCI allocation for PS4\n");
 		acpi_irq_handler = handler;
 		acpi_irq_context = context;
