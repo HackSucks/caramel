@@ -45,6 +45,8 @@ static void xhci_aeolia_quirks(struct device *dev, struct xhci_hcd *xhci)
 	 * Do not touch DMA mask, we need a custom one
 	 */
 	xhci->quirks |= XHCI_PLAT | XHCI_PLAT_DMA;
+
+	xhci->imod_interval = 0;
 }
 
 /* called during probe() after chip reset completes */
@@ -91,10 +93,12 @@ static int xhci_aeolia_assign_irqs(struct pci_dev *dev)
 
 static void xhci_aeolia_free_irqs(struct pci_dev *dev, int nr_irqs)
 {
-	if (xhci_aeolia_is_baikal(dev))
+	if (xhci_aeolia_is_baikal(dev)) {
 		bpcie_free_irqs(dev->irq, nr_irqs);
-	else
-		apcie_free_irqs(dev->irq, nr_irqs);
+		return;
+	}
+
+	apcie_free_irqs(dev->irq, nr_irqs);
 }
 
 static int xhci_aeolia_probe_one(struct pci_dev *dev, int index)

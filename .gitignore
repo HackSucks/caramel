@@ -199,3 +199,9 @@ sphinx_*/
 
 # bc language scripts (not LLVM bitcode)
 !kernel/time/timeconst.bc
+
+# Added
+!.github
+!.dockerignore
+!.Dockerfile*
+/include/ksym/
