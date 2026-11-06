@@ -222,6 +222,8 @@ static int amdgpu_firmware_info(struct drm_amdgpu_info_firmware *fw_info,
 	switch (query_fw->fw_type) {
 	case AMDGPU_INFO_FW_VCE:
 		fw_info->ver = adev->vce.fw_version;
+		if (adev->vce.fw_version && amdgpu_vce_is_native(adev))
+			fw_info->ver = (40 << 24) | (2 << 16) | (2 << 8);
 		fw_info->feature = adev->vce.fb_version;
 		break;
 	case AMDGPU_INFO_FW_UVD:
