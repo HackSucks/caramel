@@ -612,6 +612,13 @@ config X86_PS4
 	help
 	  Select to include support for the Sony PlayStation 4 game console.
 
+config PS4_ICCNODE
+	bool "PS4 /dev/icc character device node"
+	depends on X86_PS4
+	default y
+	help
+	  Enable userspace /dev/icc character device node and ioctl interface.
+
 config X86_PS4_BAIKAL
 	bool "Sony PlayStation 4 Baikal southbridge support"
 	depends on X86_PS4

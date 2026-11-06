@@ -6,6 +6,7 @@
 #include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
+#include <linux/device.h>
 #include <asm/ps4.h>
 #include "aeolia.h"
 
@@ -14,9 +15,13 @@
  * having to get a reference to the device. */
 static struct apcie_dev *icc_sc;
 DEFINE_MUTEX(icc_mutex);
+#ifdef CONFIG_PS4_ICCNODE
 static DEFINE_MUTEX(icc_ioctl_mutex);
 static bool icc_chrdev_registered;
 static int icc_major;
+static struct class *icc_class;
+static struct device *icc_device;
+#endif
 
 /* The ICC message passing interface seems to be potentially designed to
  * support multiple outstanding requests at once, but the original PS4 OS never
@@ -318,6 +323,11 @@ __maybe_unused void resetUsbPort(void)
 		pr_err("icc: USB disable failed: %d\n", ret);
 		return;
 	}
+	if (resp[0] != 0 || resp[1] != 0) {
+		pr_err("icc: USB disable reported failure: %d, %d\n",
+			resp[0], resp[1]);
+		return;
+	}
 	pr_debug("icc: USB disable ret=%d, reply %02x %02x %02x %02x\n",
 		 ret, resp[0], resp[1], resp[2], resp[3]);
 
@@ -325,6 +335,11 @@ __maybe_unused void resetUsbPort(void)
 	ret = apcie_icc_cmd(5, 0x10, &on, sizeof(on), resp, 20);
 	if (ret < 0) {
 		pr_err("icc: USB enable failed: %d\n", ret);
+		return;
+	}
+	if (resp[0] != 0 || resp[1] != 0) {
+		pr_err("icc: USB enable reported failure: %d, %d\n",
+			resp[0], resp[1]);
 		return;
 	}
 	pr_debug("icc: USB enable ret=%d, reply %02x %02x %02x %02x\n",
@@ -352,6 +367,11 @@ void resetBtWlan(void)
 		pr_err("icc: BT/WLAN enable failed: %d\n", ret);
 		return;
 	}
+	if (resp[0] != 0 || resp[1] != 0) {
+		pr_err("icc: BT/WLAN enable reported failure: %d, %d\n",
+			resp[0], resp[1]);
+		return;
+	}
 	pr_debug("icc: BT/WLAN enable ret=%d, reply %02x %02x %02x %02x\n",
 		 ret, resp[0], resp[1], resp[2], resp[3]);
 }
@@ -360,15 +380,11 @@ void do_icc_init(void) {
 	u8 svc = 0x10;
 	u8 reply[0x30];
 	static const u8 led_config[] = {
-		3, 1, 0, 0,
-			0x10, 1, /* Blue: on */
-				2, 0xff, 2, 1, 0x00,
-			0x11, 1, /* White: off */
+		2, 1, 0, 0,
+			0x10, 1,
 				2, 0x00, 2, 1, 0x00,
-			0x02, 3, /* Orange: delay and pulse, loop forever */
-				1, 0x00, 4, 1, 0xbf,
-				2, 0xff, 5, 1, 0xff,
-				2, 0x00, 5, 1, 0xff,
+			0x11, 1,
+				2, 0xff, 2, 1, 0x00,
 	};
 	int ret;
 	// test: get FW version
@@ -397,6 +413,29 @@ void do_icc_init(void) {
 			 reply[4], reply[5], reply[6], reply[7]);
 }
 
+static int __init ps4_led_boot_complete(void)
+{
+	static const u8 led_config[] = {
+		2, 1, 0, 0,
+			0x10, 1,
+				2, 0xff, 2, 1, 0x00,
+			0x11, 1,
+				2, 0x00, 2, 1, 0x00,
+	};
+	u8 reply[0x30];
+	int ret;
+
+	if (!icc_sc)
+		return 0;
+
+	ret = apcie_icc_cmd(9, 0x20, led_config, ARRAY_SIZE(led_config), reply, 0x30);
+	if (ret < 0)
+		pr_err("icc: boot-complete LED set failed: %d\n", ret);
+
+	return 0;
+}
+late_initcall(ps4_led_boot_complete);
+
 static void icc_shutdown(void)
 {
 	uint8_t command[] = {
@@ -421,6 +460,7 @@ void icc_reboot(void)
 	WARN_ON(1);
 }
 
+#ifdef CONFIG_PS4_ICCNODE
 static void *ioctl_send_buf;
 static void *ioctl_reply_buf;
 
@@ -504,6 +544,7 @@ out_unlock_ioctl:
  	.owner = THIS_MODULE,
  	.unlocked_ioctl = icc_ioctl,
  };
+#endif
 
 int apcie_icc_init(struct apcie_dev *sc)
 {
@@ -594,6 +635,7 @@ int apcie_icc_init(struct apcie_dev *sc)
 	do_icc_init();
 	pm_power_off = &icc_shutdown;
 
+#ifdef CONFIG_PS4_ICCNODE
 	ioctl_send_buf = kzalloc(ICC_MAX_PAYLOAD, GFP_KERNEL);
 	if (!ioctl_send_buf) {
 		sc_warn("icc: alloc ioctl_send_buf failed, leaving /dev/icc disabled\n");
@@ -615,11 +657,27 @@ int apcie_icc_init(struct apcie_dev *sc)
 		kfree(ioctl_send_buf);
 		ioctl_reply_buf = NULL;
 		ioctl_send_buf = NULL;
-		goto unassign_global;
+		goto done;
 	}
 	icc_major = ret;
 	icc_chrdev_registered = true;
+
+	icc_class = class_create("icc");
+	if (IS_ERR(icc_class)) {
+		sc_warn("icc: class_create failed (%ld), /dev/icc unavailable\n",
+			PTR_ERR(icc_class));
+		icc_class = NULL;
+	} else {
+		icc_device = device_create(icc_class, NULL,
+					   MKDEV(icc_major, 0), NULL, "icc");
+		if (IS_ERR(icc_device)) {
+			sc_warn("icc: device_create failed (%ld), /dev/icc unavailable\n",
+				PTR_ERR(icc_device));
+			icc_device = NULL;
+		}
+	}
  done:
+#endif
 
 	return 0;
 
@@ -646,7 +704,16 @@ put_mem_dev:
 void apcie_icc_remove(struct apcie_dev *sc)
 {
 	sc_err("apcie_icc_remove: shouldn't normally be called\n");
+#ifdef CONFIG_PS4_ICCNODE
 	if (icc_chrdev_registered) {
+		if (icc_device) {
+			device_destroy(icc_class, MKDEV(icc_major, 0));
+			icc_device = NULL;
+		}
+		if (icc_class) {
+			class_destroy(icc_class);
+			icc_class = NULL;
+		}
 		unregister_chrdev(icc_major, "icc");
 		icc_major = 0;
 		icc_chrdev_registered = false;
@@ -655,6 +722,7 @@ void apcie_icc_remove(struct apcie_dev *sc)
 	kfree(ioctl_send_buf);
 	ioctl_reply_buf = NULL;
 	ioctl_send_buf = NULL;
+#endif
 	pm_power_off = NULL;
 	icc_pwrbutton_remove(sc);
 	icc_i2c_remove(sc);

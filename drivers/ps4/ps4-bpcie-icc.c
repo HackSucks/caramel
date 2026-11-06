@@ -6,6 +6,7 @@
 #include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
+#include <linux/device.h>
 #include <linux/reboot.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
@@ -539,6 +540,10 @@ static int icc_sys_off_cb(struct sys_off_data *data)
 
 static void *ioctl_tmp_buf = NULL;
 static bool icc_chrdev_registered;
+#ifdef CONFIG_PS4_ICCNODE
+static struct class *icc_class;
+static struct device *icc_device;
+#endif
 
  static long icc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
  {
@@ -674,6 +679,23 @@ int bpcie_icc_init(struct bpcie_dev *sc)
  		goto done;
  	}
 	icc_chrdev_registered = true;
+
+#ifdef CONFIG_PS4_ICCNODE
+	icc_class = class_create("icc");
+	if (IS_ERR(icc_class)) {
+		sc_warn("icc: class_create failed (%ld), /dev/icc unavailable\n",
+			PTR_ERR(icc_class));
+		icc_class = NULL;
+	} else {
+		icc_device = device_create(icc_class, NULL,
+					   MKDEV(ICC_MAJOR, 0), NULL, "icc");
+		if (IS_ERR(icc_device)) {
+			sc_warn("icc: device_create failed (%ld), /dev/icc unavailable\n",
+				PTR_ERR(icc_device));
+			icc_device = NULL;
+		}
+	}
+#endif
  done:
 	pci_dev_put(mem_dev);
 
@@ -699,6 +721,16 @@ void bpcie_icc_remove(struct bpcie_dev *sc)
 {
 	sc_err("bpcie_icc_remove: shouldn't normally be called\n");
 	if (icc_chrdev_registered) {
+#ifdef CONFIG_PS4_ICCNODE
+		if (icc_device) {
+			device_destroy(icc_class, MKDEV(ICC_MAJOR, 0));
+			icc_device = NULL;
+		}
+		if (icc_class) {
+			class_destroy(icc_class);
+			icc_class = NULL;
+		}
+#endif
 		unregister_chrdev(ICC_MAJOR, "icc");
 		icc_chrdev_registered = false;
 	}
