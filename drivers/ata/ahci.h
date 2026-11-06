@@ -487,22 +487,22 @@ struct ahci_controller{
 	u32 trace_len;
 };
 
-void bpcie_sata_phy_init(struct device *dev, struct ahci_controller *ctlr);
+void ps4sb_sata_phy_init(struct device *dev, struct ahci_controller *ctlr);
 #ifdef CONFIG_X86_PS4
-int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio);
+int baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio);
 #else
-static inline int bpcie_baikal_sata_phy_init(struct pci_dev *pdev,
+static inline int baikal_sata_phy_init(struct pci_dev *pdev,
 					     void __iomem *ahci_mmio)
 {
 	return -ENODEV;
 }
 #endif
 
-static inline void bpcie_ahci_write(struct f_resource *r_mem, u32 offset, u32 val) {
+static inline void ps4sb_ahci_write(struct f_resource *r_mem, u32 offset, u32 val) {
 	iowrite32(val, r_mem->r_bushandle + offset);
 }
 
-static inline u32 bpcie_ahci_read(struct f_resource *r_mem, u32 offset) {
+static inline u32 ps4sb_ahci_read(struct f_resource *r_mem, u32 offset) {
 		return ioread32(r_mem->r_bushandle + offset);
 }
 #endif

@@ -7,7 +7,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/err.h>
-#include "aeolia.h"
+#include "ps4sb.h"
 #include "ps4-fan.h"
 
 #define PS4_FAN_CACHE_JIFFIES HZ

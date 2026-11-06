@@ -15,7 +15,7 @@
 #include <linux/delay.h>
 #include <asm/ps4.h>
 #include "xhci-aeolia.h"
-#include "../../ps4/aeolia.h"
+#include "../../ps4/ps4sb.h"
 
 #include "xhci.h"
 
@@ -259,7 +259,7 @@ static int ahci_init_one(struct pci_dev *pdev)
 	}
 
 	if (baikal) {
-		rc = bpcie_baikal_sata_phy_init(pdev, hpriv->mmio);
+		rc = baikal_sata_phy_init(pdev, hpriv->mmio);
 		if (rc)
 			goto unmap_registers;
 	} else {
@@ -273,7 +273,7 @@ static int ahci_init_one(struct pci_dev *pdev)
 				ctlr->r_mem = r_mem;
 				ctlr->dev_id = 0;
 				ctlr->trace_len = 6;
-				bpcie_sata_phy_init(&pdev->dev, ctlr);
+				ps4sb_sata_phy_init(&pdev->dev, ctlr);
 				kfree(ctlr);
 			}
 			kfree(r_mem);

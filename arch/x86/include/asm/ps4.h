@@ -32,8 +32,8 @@ extern unsigned long ps4_calibrate_tsc(void);
  * Returns 1 or count, depending on IRQ allocation constraints, or negative on
  * error. Assigned IRQ(s) start at dev->irq.
  */
-extern int apcie_assign_irqs(struct pci_dev *dev, int nvec);
-extern void apcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
+extern int aeolia_assign_irqs(struct pci_dev *dev, int nvec);
+extern void aeolia_free_irqs(unsigned int virq, unsigned int nr_irqs);
 
 typedef void (*ps4sb_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
 				   u16 length);
@@ -49,8 +49,8 @@ extern int ps4sb_status(void);
 extern int ps4sb_assign_irqs(struct pci_dev *dev, int nvec);
 extern void ps4sb_free_irqs(unsigned int virq, unsigned int nr_irqs);
 extern bool ps4_is_baikal(void);
-extern int bpcie_assign_irqs(struct pci_dev *dev, int nvec);
-extern void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
+extern int baikal_assign_irqs(struct pci_dev *dev, int nvec);
+extern void baikal_free_irqs(unsigned int virq, unsigned int nr_irqs);
 extern void ps4sb_icc_reboot(void);
 extern int ps4sb_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);

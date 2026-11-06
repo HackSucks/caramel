@@ -40,7 +40,7 @@
 
 #ifdef CONFIG_X86_PS4
 #include <asm/ps4.h>
-#include "../../../ps4/aeolia.h"
+#include "../../../ps4/ps4sb.h"
 #endif
 
 #include "sky2.h"
@@ -4628,13 +4628,13 @@ static void aeolia_get_mac_address(struct sky2_hw *hw, unsigned char *addr) {
 		return;
 	}
 
-	bp_base = pci_resource_start(mem_dev, 5) + APCIE_SPM_BP_BASE;
-	if (!request_mem_region(bp_base, APCIE_SPM_BP_SIZE, "spm.bp")) {
+	bp_base = pci_resource_start(mem_dev, 5) + AEOLIA_SPM_BP_BASE;
+	if (!request_mem_region(bp_base, AEOLIA_SPM_BP_SIZE, "spm.bp")) {
 		dev_err(&hw->pdev->dev, "sky2: failed to request bootparam SPM region\n");
 		return;
 	}
 
-	bp = ioremap(bp_base, APCIE_SPM_BP_SIZE);
+	bp = ioremap(bp_base, AEOLIA_SPM_BP_SIZE);
 	if (!bp) {
 		dev_err(&hw->pdev->dev, "sky2: failed to map bootparam portion of SPM\n");
 		goto release_bp;
@@ -4644,7 +4644,7 @@ static void aeolia_get_mac_address(struct sky2_hw *hw, unsigned char *addr) {
 
 	iounmap(bp);
 release_bp:
-	release_mem_region(bp_base, APCIE_SPM_BP_SIZE);
+	release_mem_region(bp_base, AEOLIA_SPM_BP_SIZE);
 }
 #endif
 
