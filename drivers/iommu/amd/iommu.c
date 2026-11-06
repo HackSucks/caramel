@@ -32,6 +32,7 @@
 #include <linux/irqdomain.h>
 #include <linux/percpu.h>
 #include <linux/cc_platform.h>
+#include <asm/ps4.h>
 #include <asm/irq_remapping.h>
 #include <asm/io_apic.h>
 #include <asm/apic.h>
@@ -3242,6 +3243,9 @@ static int amd_iommu_def_domain_type(struct device *dev)
 		return IOMMU_DOMAIN_DMA;
 
 #ifdef CONFIG_X86_PS4
+	if (ps4sb_status() >= 0 && !ps4_is_baikal())
+		return IOMMU_DOMAIN_IDENTITY;
+
 	if (amd_iommu_ps4_baikal_force_identity(dev) &&
 	    !cc_platform_has(CC_ATTR_MEM_ENCRYPT) &&
 	    !amd_iommu_snp_en)
