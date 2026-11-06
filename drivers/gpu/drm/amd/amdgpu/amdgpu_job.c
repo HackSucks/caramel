@@ -32,6 +32,7 @@
 #include "amdgpu_reset.h"
 #include "amdgpu_dev_coredump.h"
 #include "amdgpu_xgmi.h"
+#include "vce_liverpool.h"
 
 static void amdgpu_job_do_core_dump(struct amdgpu_device *adev,
 				    struct amdgpu_job *job)
@@ -93,6 +94,11 @@ static enum drm_gpu_sched_stat amdgpu_job_timedout(struct drm_sched_job *s_job)
 	struct amdgpu_task_info *ti = NULL;
 	struct amdgpu_device *adev = ring->adev;
 	int idx, r;
+
+	if (vce_liverpool_job_timeout(job)) {
+		drm_sched_suspend_timeout(&ring->sched);
+		return DRM_GPU_SCHED_STAT_ENODEV;
+	}
 
 	if (!drm_dev_enter(adev_to_drm(adev), &idx)) {
 		dev_info(adev->dev, "%s - device unplugged skipping recovery on scheduler:%s",
@@ -334,6 +340,8 @@ void amdgpu_job_set_gang_leader(struct amdgpu_job *job,
 
 void amdgpu_job_free(struct amdgpu_job *job)
 {
+	vce_liverpool_free_job(job);
+
 	if (job->gang_submit != &job->base.s_fence->scheduled)
 		dma_fence_put(job->gang_submit);
 
@@ -373,10 +381,17 @@ int amdgpu_job_submit_direct(struct amdgpu_job *job, struct amdgpu_ring *ring,
 	int r;
 
 	job->base.sched = &ring->sched;
-	r = amdgpu_ib_schedule(ring, job, fence);
+	if (vce_liverpool_cpu_job(job)) {
+		*fence = dma_fence_get_stub();
+		r = 0;
+	} else {
+		r = amdgpu_ib_schedule(ring, job, fence);
+	}
 
 	if (r)
 		return r;
+	if (job->vce_native && *fence)
+		*fence = vce_liverpool_complete_job(job, *fence);
 
 	amdgpu_job_free(job);
 	return 0;
@@ -443,7 +458,10 @@ static struct dma_fence *amdgpu_job_run(struct drm_sched_job *sched_job)
 		dev_dbg(adev->dev, "Skip scheduling IBs in ring(%s)",
 			ring->name);
 	} else {
-		r = amdgpu_ib_schedule(ring, job, &fence);
+		if (vce_liverpool_cpu_job(job))
+			fence = dma_fence_get_stub();
+		else
+			r = amdgpu_ib_schedule(ring, job, &fence);
 		if (r)
 			dev_err(adev->dev,
 				"Error scheduling IBs (%d) in ring(%s)", r,
@@ -451,6 +469,8 @@ static struct dma_fence *amdgpu_job_run(struct drm_sched_job *sched_job)
 	}
 
 	job->job_run_counter++;
+	if (!r && fence && job->vce_native)
+		fence = vce_liverpool_complete_job(job, fence);
 	amdgpu_job_free_resources(job);
 
 	fence = r ? ERR_PTR(r) : fence;

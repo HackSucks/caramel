@@ -36,6 +36,7 @@
 #include "amdgpu_vce.h"
 #include "amdgpu_cs.h"
 #include "cikd.h"
+#include "vce_liverpool.h"
 
 /* 1 second timeout */
 #define VCE_IDLE_TIMEOUT	msecs_to_jiffies(1000)
@@ -49,6 +50,7 @@
 #define FIRMWARE_KABINI	"amdgpu/kabini_vce.bin"
 #define FIRMWARE_KAVERI	"amdgpu/kaveri_vce.bin"
 #define FIRMWARE_HAWAII	"amdgpu/hawaii_vce.bin"
+#define FIRMWARE_LIVERPOOL "amdgpu/liverpool_vce.bin"
 #define FIRMWARE_MULLINS	"amdgpu/mullins_vce.bin"
 #endif
 #define FIRMWARE_TONGA		"amdgpu/tonga_vce.bin"
@@ -72,6 +74,7 @@ MODULE_FIRMWARE(FIRMWARE_BONAIRE);
 MODULE_FIRMWARE(FIRMWARE_KABINI);
 MODULE_FIRMWARE(FIRMWARE_KAVERI);
 MODULE_FIRMWARE(FIRMWARE_HAWAII);
+MODULE_FIRMWARE(FIRMWARE_LIVERPOOL);
 MODULE_FIRMWARE(FIRMWARE_MULLINS);
 #endif
 MODULE_FIRMWARE(FIRMWARE_TONGA);
@@ -92,6 +95,11 @@ static int amdgpu_vce_get_create_msg(struct amdgpu_ring *ring, uint32_t handle,
 				     struct dma_fence **fence);
 static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
 				      bool direct, struct dma_fence **fence);
+
+bool amdgpu_vce_is_native(struct amdgpu_device *adev)
+{
+	return adev->asic_type == CHIP_LIVERPOOL && adev->pdev->device == 0x9923;
+}
 
 /**
  * amdgpu_vce_firmware_name() - determine the firmware file name for VCE
@@ -120,6 +128,8 @@ static const char *amdgpu_vce_firmware_name(struct amdgpu_device *adev)
 		return FIRMWARE_KABINI;
 	case CHIP_HAWAII:
 		return FIRMWARE_HAWAII;
+	case CHIP_LIVERPOOL:
+		return amdgpu_vce_is_native(adev) ? FIRMWARE_LIVERPOOL : NULL;
 	case CHIP_MULLINS:
 		return FIRMWARE_MULLINS;
 #endif
@@ -184,6 +194,14 @@ int amdgpu_vce_early_init(struct amdgpu_device *adev)
 	}
 
 	hdr = (const struct common_firmware_header *)adev->vce.fw->data;
+	if (amdgpu_vce_is_native(adev) &&
+	    (adev->vce.fw->size != 52056 ||
+	     le32_to_cpu(hdr->ucode_size_bytes) != 51800 ||
+	     le32_to_cpu(hdr->ucode_array_offset_bytes) != 256 ||
+	     le32_to_cpu(hdr->ucode_version) != ((31 << 20) | (3 << 8) | 1))) {
+		amdgpu_ucode_release(&adev->vce.fw);
+		return -EINVAL;
+	}
 
 	ucode_version = le32_to_cpu(hdr->ucode_version);
 	version_major = (ucode_version >> 20) & 0xfff;
@@ -577,6 +595,14 @@ static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
 
 	/* stitch together an VCE destroy msg */
 	ib->length_dw = 0;
+	if (amdgpu_vce_is_native(ring->adev)) {
+		r = vce_liverpool_destroy_session(ring->adev, handle, ib->ptr, job);
+		if (r < 0)
+			goto err;
+		ib->length_dw = r;
+		r = 0;
+		goto submit;
+	}
 	ib->ptr[ib->length_dw++] = 0x0000000c; /* len */
 	ib->ptr[ib->length_dw++] = 0x00000001; /* session cmd */
 	ib->ptr[ib->length_dw++] = handle;
@@ -596,6 +622,7 @@ static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
 	for (i = ib->length_dw; i < ib_size_dw; ++i)
 		ib->ptr[i] = 0x0;
 
+submit:
 	if (direct)
 		r = amdgpu_job_submit_direct(job, ring, &f);
 	else
@@ -662,7 +689,6 @@ static int amdgpu_vce_validate_bo(struct amdgpu_cs_parser *p,
 	}
 	return ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
 }
-
 
 /**
  * amdgpu_vce_cs_reloc - command submission relocation
@@ -758,14 +784,7 @@ static int amdgpu_vce_validate_handle(struct amdgpu_cs_parser *p,
 	return -EINVAL;
 }
 
-/**
- * amdgpu_vce_ring_parse_cs - parse and validate the command stream
- *
- * @p: parser context
- * @job: the job to parse
- * @ib: the IB to patch
- */
-int amdgpu_vce_ring_parse_cs(struct amdgpu_cs_parser *p,
+int amdgpu_vce_ring_parse_cs_legacy(struct amdgpu_cs_parser *p,
 			     struct amdgpu_job *job,
 			     struct amdgpu_ib *ib)
 {
@@ -1007,6 +1026,14 @@ out:
 	return r;
 }
 
+int amdgpu_vce_ring_parse_cs(struct amdgpu_cs_parser *p,
+		struct amdgpu_job *job, struct amdgpu_ib *ib)
+{
+	if (amdgpu_vce_is_native(p->adev))
+		return vce_liverpool_parse_cs(p, job, ib);
+	return amdgpu_vce_ring_parse_cs_legacy(p, job, ib);
+}
+
 /**
  * amdgpu_vce_ring_parse_cs_vm - parse the command stream in VM mode
  *
@@ -1189,6 +1216,9 @@ int amdgpu_vce_ring_test_ib(struct amdgpu_ring *ring, long timeout)
 {
 	struct dma_fence *fence = NULL;
 	long r;
+
+	if (amdgpu_vce_is_native(ring->adev))
+		return vce_liverpool_test_ib(ring, timeout);
 
 	/* skip vce ring1/2 ib test for now, since it's not reliable */
 	if (ring != &ring->adev->vce.ring[0])
