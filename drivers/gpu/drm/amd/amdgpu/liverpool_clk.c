@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+#include <asm/ps4.h>
 #include <linux/delay.h>
 #include "amdgpu.h"
 #include "liverpool_clk.h"
@@ -326,6 +327,9 @@ int liverpool_clk_force_max(struct amdgpu_device *adev)
 	u32 startup_did, current_did;
 	u32 spll_pdiva, spll_fbdiv;
 	u32 status;
+
+	if (!ps4_is_baikal())
+		return 0;
 
 	if (adev->asic_type != CHIP_GLADIUS)
 		return liverpool_sclk_set_top(adev);

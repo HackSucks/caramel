@@ -332,21 +332,17 @@ static const struct sdhci_pci_fixes sdhci_intel_qrk = {
 #ifdef CONFIG_X86_PS4
 static int aeolia_assign_irqs(struct sdhci_pci_slot *slot)
 {
-#ifdef CONFIG_X86_PS4_BAIKAL
 	if (slot->chip->pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_SDHCI)
 		return bpcie_assign_irqs(slot->chip->pdev, 1);
-#endif
 	return apcie_assign_irqs(slot->chip->pdev, 1);
 }
 
 static void aeolia_free_irqs(struct sdhci_pci_slot *slot)
 {
-#ifdef CONFIG_X86_PS4_BAIKAL
 	if (slot->chip->pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_SDHCI) {
 		bpcie_free_irqs(slot->host->irq, 1);
 		return;
 	}
-#endif
 	apcie_free_irqs(slot->host->irq, 1);
 }
 
@@ -2053,9 +2049,7 @@ static const struct pci_device_id pci_ids[] = {
 	#ifdef CONFIG_X86_PS4
 	SDHCI_PCI_DEVICE(SONY, AEOLIA_SDHCI, aeolia),
 	SDHCI_PCI_DEVICE(SONY, BELIZE_SDHCI, aeolia),
-#ifdef CONFIG_X86_PS4_BAIKAL
 	SDHCI_PCI_DEVICE(SONY, BAIKAL_SDHCI, aeolia),
-#endif
 	#endif
 	SDHCI_PCI_DEVICE(GLI, 9750, gl9750),
 	SDHCI_PCI_DEVICE(GLI, 9755, gl9755),

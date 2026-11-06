@@ -1615,7 +1615,7 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 	}, {
 		PCI_VDEVICE(SONY, PCI_DEVICE_ID_SONY_BELIZE_AHCI),
 		.driver_data = board_ahci_31bit_dma,
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 	}, {
 		PCI_VDEVICE(SONY, PCI_DEVICE_ID_SONY_BAIKAL_AHCI),
 		.driver_data = board_ahci_31bit_dma,
@@ -2757,12 +2757,10 @@ static void ahci_init_irq(struct pci_dev *pdev, unsigned int n_ports,
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-#ifdef CONFIG_X86_PS4_BAIKAL
 		if (pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
 			bpcie_assign_irqs(pdev, n_ports);
 			return;
 		}
-#endif
 		apcie_assign_irqs(pdev, n_ports);
 		return;
 	}
@@ -2936,7 +2934,7 @@ static int ahci_validate_bar_size(struct pci_dev *pdev, int bar,
 	return 0;
 }
 
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 static bool ahci_baikal_shared_phy_seeded(struct pci_dev *pdev)
 {
 	struct pci_dev *xhci;
@@ -2977,7 +2975,8 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (apcie_status() == 0)
 		return -EPROBE_DEFER;
 
-	if (pdev->vendor == PCI_VENDOR_ID_SONY)
+	if (pdev->vendor == PCI_VENDOR_ID_SONY &&
+	    pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI)
 		sht = &ahci_ps4_sht;
 	#endif
 
@@ -3011,7 +3010,7 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 			ahci_pci_bar = AHCI_PCI_BAR_CAVIUM;
 		if (pdev->device == 0xa084)
 			ahci_pci_bar = AHCI_PCI_BAR_CAVIUM_GEN5;
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 	} else if (pdev->vendor == PCI_VENDOR_ID_SONY &&
 		   pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
 		ahci_pci_bar = AHCI_PCI_BAR0_BAIKAL;
@@ -3088,7 +3087,7 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 				&dev_attr_remapped_nvme.attr,
 				NULL);
 
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY &&
 	    pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
 		if (!ahci_baikal_shared_phy_seeded(pdev)) {
@@ -3272,12 +3271,10 @@ static void ahci_remove_one(struct pci_dev *pdev)
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-#ifdef CONFIG_X86_PS4_BAIKAL
 		if (pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
 			bpcie_free_irqs(pdev->irq, 1);
 			return;
 		}
-#endif
 		apcie_free_irqs(pdev->irq, 1);
 	}
 	#endif
