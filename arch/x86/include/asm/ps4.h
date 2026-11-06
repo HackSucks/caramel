@@ -35,7 +35,7 @@ extern unsigned long ps4_calibrate_tsc(void);
 extern int apcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void apcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
 
-typedef void (*bpcie_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
+typedef void (*ps4sb_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
 				   u16 length);
 extern void ps4_samu_lock(void);
 extern void ps4_samu_unlock(void);
@@ -45,23 +45,21 @@ extern void ps4_samu_unmap(void);
 extern int ps4_samu_rng(void *buf, size_t len);
 extern int ps4_samu_ccp(void *op);
 extern int apcie_status(void);
-extern int apcie_icc_cmd(u8 major, u16 minor, const void *data,
-			 u16 length, void *reply, u16 reply_length);
 extern bool ps4_is_baikal(void);
 extern int bpcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
-extern void bpcie_icc_reboot(void);
+extern void ps4sb_icc_reboot(void);
 extern int bpcie_status(void);
-extern int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
+extern int ps4sb_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
-extern int bpcie_icc_register_event_handler(u8 major, bpcie_icc_event_fn fn,
+extern int ps4sb_icc_register_event_handler(u8 major, ps4sb_icc_event_fn fn,
 					    void *ctx);
-extern void bpcie_icc_unregister_event_handler(u8 major);
+extern void ps4sb_icc_unregister_event_handler(u8 major);
 
 
 #else
 
-typedef void (*bpcie_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
+typedef void (*ps4sb_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
 				   u16 length);
 static inline int apcie_assign_irqs(struct pci_dev *dev, int nvec)
 {
@@ -71,11 +69,6 @@ static inline void apcie_free_irqs(unsigned int virq, unsigned int nvec)
 {
 }
 static inline int apcie_status(void)
-{
-	return -ENODEV;
-}
-static inline int apcie_icc_cmd(u8 major, u16 minor, const void *data,
-				u16 length, void *reply, u16 reply_length)
 {
 	return -ENODEV;
 }
@@ -94,18 +87,18 @@ static inline int bpcie_status(void)
 {
 	return -ENODEV;
 }
-static inline int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
+static inline int ps4sb_icc_cmd(u8 major, u16 minor, const void *data,
 				u16 length, void *reply, u16 reply_length)
 {
 	return -ENODEV;
 }
-static inline int bpcie_icc_register_event_handler(u8 major,
-						   bpcie_icc_event_fn fn,
+static inline int ps4sb_icc_register_event_handler(u8 major,
+						   ps4sb_icc_event_fn fn,
 						   void *ctx)
 {
 	return -ENODEV;
 }
-static inline void bpcie_icc_unregister_event_handler(u8 major)
+static inline void ps4sb_icc_unregister_event_handler(u8 major)
 {
 }
 

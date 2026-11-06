@@ -15,7 +15,7 @@ static int ps4_buzzer_send(u8 value)
 	int ret;
 
 	mutex_lock(&ps4_buzzer_lock);
-	ret = apcie_icc_cmd(PS4_BUZZER_ICC_MAJOR, PS4_BUZZER_ICC_MINOR,
+	ret = ps4sb_icc_cmd(PS4_BUZZER_ICC_MAJOR, PS4_BUZZER_ICC_MINOR,
 			    &payload, PS4_BUZZER_PAYLOAD_LEN,
 			    reply, sizeof(reply));
 	mutex_unlock(&ps4_buzzer_lock);

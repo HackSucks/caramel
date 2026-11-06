@@ -314,7 +314,7 @@ static int cq_exec(struct i2c_cmdqueue *q)
 	q->cmd->length = q->p - (u8 *)q->cmd;
 	q->req.length = q->p - (u8 *)&q->req;
 
-	res = apcie_icc_cmd(0x10, 0, &q->req, q->req.length,
+	res = ps4sb_icc_cmd(0x10, 0, &q->req, q->req.length,
 		      &q->reply, sizeof(q->reply));
 
 	if (res < 5) {
@@ -1100,7 +1100,7 @@ static void ps4_bridge_events_stop(void *data)
 	if (!mn_bridge->hdmi_events)
 		return;
 	ps4_bridge_set_event_control(mn_bridge, 0);
-	bpcie_icc_unregister_event_handler(PS4_BRIDGE_ICC_SERVICE);
+	ps4sb_icc_unregister_event_handler(PS4_BRIDGE_ICC_SERVICE);
 	mn_bridge->hdmi_events = false;
 	kfree(mn_bridge->hdmi_edid);
 	mn_bridge->hdmi_edid = NULL;
@@ -1112,7 +1112,7 @@ static void ps4_bridge_events_start(struct device *dev,
 {
 	if (bpcie_status() <= 0)
 		return;
-	if (bpcie_icc_register_event_handler(PS4_BRIDGE_ICC_SERVICE,
+	if (ps4sb_icc_register_event_handler(PS4_BRIDGE_ICC_SERVICE,
 					     ps4_bridge_hdmi_event, mn_bridge))
 		return;
 	mn_bridge->hdmi_events = true;
