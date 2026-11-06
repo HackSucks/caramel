@@ -286,7 +286,7 @@ static int uvd_v5_0_resume(struct amdgpu_ip_block *ip_block)
  */
 static bool uvd_v5_0_liverpool(struct amdgpu_device *adev)
 {
-	return adev->asic_type == CHIP_LIVERPOOL && adev->pdev->device == 0x9923;
+	return amdgpu_vce_is_native(adev);
 }
 
 static int uvd_v5_0_liverpool_start(struct amdgpu_device *adev)

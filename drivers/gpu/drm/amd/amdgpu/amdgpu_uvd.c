@@ -210,7 +210,7 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 #endif
 #ifdef CONFIG_DRM_AMDGPU_CIK
 	case CHIP_LIVERPOOL:
-		if (adev->pdev->device != 0x9923)
+		if (!amdgpu_vce_is_native(adev))
 			return -ENODEV;
 		fw_name = "amdgpu/liverpool_refresh_uvd.bin";
 		break;
