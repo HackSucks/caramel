@@ -845,6 +845,48 @@ static void clear_rdrand_cpuid_bit(struct cpuinfo_x86 *c)
 	pr_info_once("BIOS may not properly restore RDRAND after suspend, hiding RDRAND via CPUID. Use rdrand=force to reenable.\n");
 }
 
+#ifdef CONFIG_X86_PS4
+static const struct {
+	u32 sig;
+	const char *name;
+} ps4_cpu_names[] = {
+	{ 0x710f00, "AMD LVPJ-A0" },
+	{ 0x710f10, "AMD LVPJ-B0" },
+	{ 0x710f11, "AMD LVPJ-B1" },
+	{ 0x710f12, "AMD LVPJ-B2" },
+	{ 0x710f13, "AMD LVPJ-B3" },
+	{ 0x710f30, "AMD LVPP-A0" },
+	{ 0x710f31, "AMD LVPP-A0b" },
+	{ 0x710f80, "AMD LVP2-A0" },
+	{ 0x710f81, "AMD LVP2-A1" },
+	{ 0x710fa0, "AMD LVP2C-A0" },
+	{ 0x710fc0, "AMD LVP3-A0" },
+	{ 0x740f00, "AMD GL-A0" },
+	{ 0x740f01, "AMD GL-A1" },
+	{ 0x740f10, "AMD GL-B0" },
+	{ 0x740f11, "AMD GL-B1" },
+	{ 0x740f12, "AMD GL-B2" },
+	{ 0x740f30, "AMD GLC-A0" },
+};
+
+static void ps4_set_cpu_name(struct cpuinfo_x86 *c)
+{
+	u32 sig = cpuid_eax(1);
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ps4_cpu_names); i++) {
+		if (ps4_cpu_names[i].sig == sig) {
+			strscpy(c->x86_model_id, ps4_cpu_names[i].name);
+			return;
+		}
+	}
+	if ((sig & 0xffff00) == 0x710f00)
+		strscpy(c->x86_model_id, "AMD LVP");
+	else if ((sig & 0xffff00) == 0x740f00)
+		strscpy(c->x86_model_id, "AMD GL");
+}
+#endif
+
 static void init_amd_jg(struct cpuinfo_x86 *c)
 {
 	/*
@@ -855,8 +897,7 @@ static void init_amd_jg(struct cpuinfo_x86 *c)
 	clear_rdrand_cpuid_bit(c);
 
 #ifdef CONFIG_X86_PS4
-	if (c->x86_model <= 0x30)
-		strscpy(c->x86_model_id, "AMD Jaguar");
+	ps4_set_cpu_name(c);
 #endif
 }
 
