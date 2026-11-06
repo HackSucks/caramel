@@ -2489,7 +2489,7 @@ static int amdgpu_pci_probe(struct pci_dev *pdev,
 	 * so defer probe until it is ready. This test passes if this isn't
 	 * a PS4 (returns -ENODEV).
 	 */
-	if (apcie_status() == 0)
+	if (ps4sb_status() == 0)
 		return -EPROBE_DEFER;
 	#endif
 

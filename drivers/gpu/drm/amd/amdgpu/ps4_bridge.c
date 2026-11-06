@@ -1110,7 +1110,7 @@ static void ps4_bridge_events_stop(void *data)
 static void ps4_bridge_events_start(struct device *dev,
 				    struct ps4_bridge *mn_bridge)
 {
-	if (bpcie_status() <= 0)
+	if (!ps4_is_baikal() || ps4sb_status() <= 0)
 		return;
 	if (ps4sb_icc_register_event_handler(PS4_BRIDGE_ICC_SERVICE,
 					     ps4_bridge_hdmi_event, mn_bridge))
