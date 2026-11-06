@@ -38,6 +38,8 @@
 #include "smu/smu_7_1_2_sh_mask.h"
 #include "ivsrcid/ivsrcid_vislands30.h"
 
+static bool uvd_v5_0_liverpool(struct amdgpu_device *adev);
+static int uvd_v5_0_liverpool_stop(struct amdgpu_device *adev);
 static void uvd_v5_0_set_ring_funcs(struct amdgpu_device *adev);
 static void uvd_v5_0_set_irq_funcs(struct amdgpu_device *adev);
 static int uvd_v5_0_start(struct amdgpu_device *adev);
@@ -212,6 +214,9 @@ static int uvd_v5_0_hw_fini(struct amdgpu_ip_block *ip_block)
 
 	cancel_delayed_work_sync(&adev->uvd.idle_work);
 
+	if (uvd_v5_0_liverpool(adev))
+		return uvd_v5_0_liverpool_stop(adev);
+
 	if (RREG32(mmUVD_STATUS) != 0)
 		uvd_v5_0_stop(adev);
 
@@ -279,6 +284,118 @@ static int uvd_v5_0_resume(struct amdgpu_ip_block *ip_block)
  *
  * Let the UVD memory controller know it's offsets
  */
+static bool uvd_v5_0_liverpool(struct amdgpu_device *adev)
+{
+	return adev->asic_type == CHIP_LIVERPOOL && adev->pdev->device == 0x9923;
+}
+
+static int uvd_v5_0_liverpool_start(struct amdgpu_device *adev)
+{
+	struct amdgpu_ring *ring = &adev->uvd.inst->ring;
+	u64 cache = adev->uvd.inst->gpu_addr;
+	u32 value;
+	unsigned int i;
+
+	WREG32(mmUVD_MASTINT_EN, RREG32(mmUVD_MASTINT_EN) & ~6u);
+	WREG32(mmUVD_LMI_CTRL2, RREG32(mmUVD_LMI_CTRL2) | 0x100);
+	WREG32(mmUVD_SOFT_RESET, 0x20ff);
+	mdelay(5);
+	WREG32(mmUVD_CGC_GATE, RREG32(mmUVD_CGC_GATE) & 0xfff00008);
+	WREG32(mmUVD_SUVD_CGC_GATE, RREG32(mmUVD_SUVD_CGC_GATE) & 0xffffe000);
+	WREG32(mmSRBM_SOFT_RESET, RREG32(mmSRBM_SOFT_RESET) & ~0x40000u);
+	mdelay(5);
+	WREG32(mmUVD_VCPU_CNTL, (RREG32(mmUVD_VCPU_CNTL) | 0x200) & ~0x40000u);
+	WREG32(mmUVD_LMI_SWAP_CNTL, 0);
+	WREG32(mmUVD_MP_SWAP_CNTL, 0);
+	WREG32(mmUVD_LMI_CTRL, 0x203108);
+	WREG32(mmUVD_MPC_CNTL, 0x10);
+	WREG32(mmUVD_MPC_SET_MUXA0, 0x40c2040);
+	WREG32(mmUVD_MPC_SET_MUXA1, 0);
+	WREG32(mmUVD_MPC_SET_MUXB0, 0x40c2040);
+	WREG32(mmUVD_MPC_SET_MUXB1, 0);
+	WREG32(mmUVD_MPC_SET_ALU, 0);
+	WREG32(mmUVD_MPC_SET_MUX, 0x88);
+	WREG32(mmUVD_UDEC_ADDR_CONFIG, adev->gfx.config.gb_addr_config);
+	WREG32(mmUVD_UDEC_DB_ADDR_CONFIG, adev->gfx.config.gb_addr_config);
+	WREG32(mmUVD_UDEC_DBW_ADDR_CONFIG, adev->gfx.config.gb_addr_config);
+	WREG32(mmUVD_LMI_VCPU_CACHE_64BIT_BAR_LOW, lower_32_bits(cache));
+	WREG32(mmUVD_LMI_VCPU_CACHE_64BIT_BAR_HIGH, upper_32_bits(cache));
+	WREG32(mmUVD_VCPU_CACHE_OFFSET0, 0);
+	WREG32(mmUVD_VCPU_CACHE_SIZE0, 0x7d000);
+	WREG32(mmUVD_VCPU_CACHE_OFFSET1, 0xfa00);
+	WREG32(mmUVD_VCPU_CACHE_SIZE1, 0x40000);
+	WREG32(mmUVD_VCPU_CACHE_OFFSET2, 0x17a00);
+	WREG32(mmUVD_VCPU_CACHE_SIZE2, 0x120800);
+	WREG32_UVD_CTX(ixUVD_LMI_VMID_INTERNAL,
+		RREG32_UVD_CTX(ixUVD_LMI_VMID_INTERNAL) & 0xff000000);
+	WREG32_UVD_CTX(ixUVD_LMI_VMID_INTERNAL2, 0);
+	WREG32_UVD_CTX(ixUVD_LMI_VMID_INTERNAL3,
+		RREG32_UVD_CTX(ixUVD_LMI_VMID_INTERNAL3) & 0xffff0000);
+	WREG32(0x3d3c, 0);
+	WREG32(mmUVD_LMI_RBC_IB_VMID, 0);
+	WREG32(mmUVD_LMI_RBC_RB_VMID, 0);
+	WREG32(mmUVD_LMI_EXT40_ADDR, 0);
+	WREG32(0x3d65, RREG32(0x3d65) & ~15u);
+	WREG32_UVD_CTX(ixUVD_LMI_CACHE_CTRL,
+		RREG32_UVD_CTX(ixUVD_LMI_CACHE_CTRL) & ~0x10u);
+	WREG32(0x3dac, 0x10);
+	WREG32(0x3dab, 3);
+	WREG32(mmUVD_RBC_RB_CNTL, 0x11010101);
+	WREG32(mmUVD_LMI_RBC_RB_64BIT_BAR_LOW, lower_32_bits(ring->gpu_addr));
+	WREG32(mmUVD_LMI_RBC_RB_64BIT_BAR_HIGH, upper_32_bits(ring->gpu_addr));
+	WREG32(mmUVD_RBC_RB_WPTR_CNTL, 0);
+	WREG32(mmUVD_RBC_RB_RPTR_ADDR, upper_32_bits(ring->gpu_addr) >> 2);
+	WREG32(mmUVD_RBC_RB_RPTR, 0);
+	WREG32(mmUVD_RBC_RB_WPTR, 0);
+	ring->wptr = 0;
+	amdgpu_device_flush_hdp(adev, NULL);
+	WREG32(mmUVD_STATUS, RREG32(mmUVD_STATUS) | 4);
+	WREG32(mmUVD_SOFT_RESET, 8);
+	mdelay(5);
+	WREG32(mmUVD_LMI_CTRL2, RREG32(mmUVD_LMI_CTRL2) & ~0x100u);
+	WREG32(mmUVD_SOFT_RESET, 0);
+	for (i = 0; i < 1000; i++) {
+		if (RREG32(mmUVD_STATUS) & 2)
+			break;
+		usleep_range(1000, 1100);
+	}
+	if (i == 1000)
+		return -ETIMEDOUT;
+	WREG32(mmUVD_MASTINT_EN, RREG32(mmUVD_MASTINT_EN) | 6);
+	WREG32(mmUVD_STATUS, RREG32(mmUVD_STATUS) & ~4u);
+	value = 0x11010100 | order_base_2(ring->ring_size);
+	WREG32(mmUVD_RBC_RB_CNTL, value);
+	WREG32(mmUVD_RBC_RB_CNTL, value & ~0x10000u);
+	return 0;
+}
+
+static int uvd_v5_0_liverpool_stop(struct amdgpu_device *adev)
+{
+	unsigned int i;
+
+	WREG32(mmUVD_MASTINT_EN, RREG32(mmUVD_MASTINT_EN) & ~6u);
+	WREG32(mmUVD_RBC_RB_CNTL, RREG32(mmUVD_RBC_RB_CNTL) | 0x10000);
+	WREG32(mmUVD_LMI_CTRL2, RREG32(mmUVD_LMI_CTRL2) | 0x100);
+	for (i = 0; i < 10000; i++) {
+		if ((RREG32(mmUVD_LMI_STATUS) & 0x240) == 0x240)
+			break;
+		udelay(10);
+	}
+	WREG32(mmUVD_SOFT_RESET, 0x20ff);
+	if (i == 10000)
+		return -ETIMEDOUT;
+	for (i = 0; i < 10000; i++) {
+		if ((RREG32(mmUVD_LMI_STATUS) & 0x3f) == 0x3f)
+			break;
+		udelay(10);
+	}
+	if (i == 10000)
+		return -ETIMEDOUT;
+	WREG32(mmUVD_VCPU_CNTL, RREG32(mmUVD_VCPU_CNTL) & ~0x200u);
+	WREG32(mmUVD_STATUS, 0);
+	return 0;
+}
+
 static void uvd_v5_0_mc_resume(struct amdgpu_device *adev)
 {
 	uint64_t offset;
@@ -325,6 +442,9 @@ static int uvd_v5_0_start(struct amdgpu_device *adev)
 	uint32_t lmi_swap_cntl;
 	uint32_t mp_swap_cntl;
 	int i, j, r;
+
+	if (uvd_v5_0_liverpool(adev))
+		return uvd_v5_0_liverpool_start(adev);
 
 	/*disable DPG */
 	WREG32_P(mmUVD_POWER_STATUS, 0, ~(1 << 2));
@@ -461,6 +581,12 @@ static int uvd_v5_0_start(struct amdgpu_device *adev)
  */
 static void uvd_v5_0_stop(struct amdgpu_device *adev)
 {
+	if (uvd_v5_0_liverpool(adev)) {
+		if (uvd_v5_0_liverpool_stop(adev))
+			dev_err(adev->dev, "UVD stop did not drain\n");
+		return;
+	}
+
 	/* force RBC into idle state */
 	WREG32(mmUVD_RBC_RB_CNTL, 0x11010101);
 
@@ -494,6 +620,8 @@ static void uvd_v5_0_stop(struct amdgpu_device *adev)
 static void uvd_v5_0_ring_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq,
 				     unsigned flags)
 {
+	u32 source = uvd_v5_0_liverpool(ring->adev) ? 0x80000000 : 0;
+
 	WARN_ON(flags & AMDGPU_FENCE_FLAG_64BIT);
 
 	amdgpu_ring_write(ring, PACKET0(mmUVD_CONTEXT_ID, 0));
@@ -503,14 +631,19 @@ static void uvd_v5_0_ring_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq
 	amdgpu_ring_write(ring, PACKET0(mmUVD_GPCOM_VCPU_DATA1, 0));
 	amdgpu_ring_write(ring, upper_32_bits(addr) & 0xff);
 	amdgpu_ring_write(ring, PACKET0(mmUVD_GPCOM_VCPU_CMD, 0));
-	amdgpu_ring_write(ring, 0);
+	amdgpu_ring_write(ring, source);
+	if (source) {
+		amdgpu_ring_write(ring, PACKET0(0x3d7f, 0));
+		amdgpu_ring_write(ring, 0);
+		return;
+	}
 
 	amdgpu_ring_write(ring, PACKET0(mmUVD_GPCOM_VCPU_DATA0, 0));
 	amdgpu_ring_write(ring, 0);
 	amdgpu_ring_write(ring, PACKET0(mmUVD_GPCOM_VCPU_DATA1, 0));
 	amdgpu_ring_write(ring, 0);
 	amdgpu_ring_write(ring, PACKET0(mmUVD_GPCOM_VCPU_CMD, 0));
-	amdgpu_ring_write(ring, 2);
+	amdgpu_ring_write(ring, source | 2);
 }
 
 /**
@@ -612,7 +745,13 @@ static int uvd_v5_0_set_interrupt_state(struct amdgpu_device *adev,
 					unsigned type,
 					enum amdgpu_interrupt_state state)
 {
-	// TODO
+	if (uvd_v5_0_liverpool(adev)) {
+		u32 value = RREG32(mmUVD_MASTINT_EN) & ~4u;
+
+		if (state == AMDGPU_IRQ_STATE_ENABLE)
+			value |= 4;
+		WREG32(mmUVD_MASTINT_EN, value);
+	}
 	return 0;
 }
 
@@ -637,6 +776,9 @@ static void uvd_v5_0_enable_clock_gating(struct amdgpu_device *adev, bool enable
 		     UVD_SUVD_CGC_GATE__SMP_MASK |
 		     UVD_SUVD_CGC_GATE__SCM_MASK |
 		     UVD_SUVD_CGC_GATE__SDB_MASK;
+
+	if (uvd_v5_0_liverpool(adev))
+		return;
 
 	if (enable) {
 		data3 |= (UVD_CGC_GATE__SYS_MASK     |
@@ -791,6 +933,9 @@ static int uvd_v5_0_set_clockgating_state(struct amdgpu_ip_block *ip_block,
 	struct amdgpu_device *adev = ip_block->adev;
 	bool enable = (state == AMD_CG_STATE_GATE);
 
+	if (uvd_v5_0_liverpool(adev))
+		return 0;
+
 	if (enable) {
 		/* wait for STATUS to clear */
 		if (uvd_v5_0_wait_for_idle(ip_block))
@@ -820,6 +965,14 @@ static int uvd_v5_0_set_powergating_state(struct amdgpu_ip_block *ip_block,
 	struct amdgpu_device *adev = ip_block->adev;
 	int ret = 0;
 
+	if (uvd_v5_0_liverpool(adev)) {
+		if (state == AMD_PG_STATE_GATE)
+			return 0;
+		if ((RREG32(mmUVD_VCPU_CNTL) & 0x200) && !(RREG32(mmUVD_SOFT_RESET) & 8))
+			return 0;
+		return uvd_v5_0_liverpool_start(adev);
+	}
+
 	if (state == AMD_PG_STATE_GATE) {
 		uvd_v5_0_stop(adev);
 	} else {
@@ -836,6 +989,9 @@ static void uvd_v5_0_get_clockgating_state(struct amdgpu_ip_block *ip_block, u64
 {
 	struct amdgpu_device *adev = ip_block->adev;
 	int data;
+
+	if (uvd_v5_0_liverpool(adev))
+		return;
 
 	mutex_lock(&adev->pm.mutex);
 
@@ -893,9 +1049,32 @@ static const struct amdgpu_ring_funcs uvd_v5_0_ring_funcs = {
 	.end_use = amdgpu_uvd_ring_end_use,
 };
 
+static const struct amdgpu_ring_funcs uvd_v5_0_liverpool_ring_funcs = {
+	.type = AMDGPU_RING_TYPE_UVD,
+	.align_mask = 0x3f,
+	.support_64bit_ptrs = false,
+	.no_user_fence = true,
+	.get_rptr = uvd_v5_0_ring_get_rptr,
+	.get_wptr = uvd_v5_0_ring_get_wptr,
+	.set_wptr = uvd_v5_0_ring_set_wptr,
+	.parse_cs = amdgpu_uvd_ring_parse_cs,
+	.emit_frame_size =
+		14,
+	.emit_ib_size = 6,
+	.emit_ib = uvd_v5_0_ring_emit_ib,
+	.emit_fence = uvd_v5_0_ring_emit_fence,
+	.test_ring = uvd_v5_0_ring_test_ring,
+	.test_ib = amdgpu_uvd_ring_test_ib,
+	.insert_nop = uvd_v5_0_ring_insert_nop,
+	.pad_ib = amdgpu_ring_generic_pad_ib,
+	.begin_use = amdgpu_uvd_ring_begin_use,
+	.end_use = amdgpu_uvd_ring_end_use,
+};
+
 static void uvd_v5_0_set_ring_funcs(struct amdgpu_device *adev)
 {
-	adev->uvd.inst->ring.funcs = &uvd_v5_0_ring_funcs;
+	adev->uvd.inst->ring.funcs = uvd_v5_0_liverpool(adev) ?
+		&uvd_v5_0_liverpool_ring_funcs : &uvd_v5_0_ring_funcs;
 }
 
 static const struct amdgpu_irq_src_funcs uvd_v5_0_irq_funcs = {
