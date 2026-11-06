@@ -15,6 +15,7 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 
+#include <asm/ps4.h>
 #include "amdgpu.h"
 #include "liverpool_smu.h"
 
@@ -93,12 +94,14 @@ int liverpool_smu_samu_read(struct amdgpu_device *adev, u32 reg, u32 *val)
 	if (!liverpool_samu_mapped(adev) || !val)
 		return -EIO;
 
+	ps4_samu_lock();
 	mutex_lock(&liverpool_samu_mutex);
 	writel(LIVERPOOL_SAMU_OP_READ, adev->rmmio + LIVERPOOL_SAMU_CMD);
 	writel(reg, adev->rmmio + LIVERPOOL_SAMU_ADDR);
 	r = liverpool_samu_doorbell(adev);
 	if (r) {
 		mutex_unlock(&liverpool_samu_mutex);
+		ps4_samu_unlock();
 		return r;
 	}
 	stat = readl(adev->rmmio + LIVERPOOL_SAMU_STAT);
@@ -107,6 +110,7 @@ int liverpool_smu_samu_read(struct amdgpu_device *adev, u32 reg, u32 *val)
 	else
 		*val = 0;
 	mutex_unlock(&liverpool_samu_mutex);
+	ps4_samu_unlock();
 	return stat ? -EIO : 0;
 }
 
@@ -118,6 +122,7 @@ int liverpool_smu_samu_write(struct amdgpu_device *adev, u32 reg, u32 val)
 	if (!liverpool_samu_mapped(adev))
 		return -EIO;
 
+	ps4_samu_lock();
 	mutex_lock(&liverpool_samu_mutex);
 	writel(LIVERPOOL_SAMU_OP_WRITE, adev->rmmio + LIVERPOOL_SAMU_CMD);
 	writel(reg, adev->rmmio + LIVERPOOL_SAMU_ADDR);
@@ -125,10 +130,12 @@ int liverpool_smu_samu_write(struct amdgpu_device *adev, u32 reg, u32 val)
 	r = liverpool_samu_doorbell(adev);
 	if (r) {
 		mutex_unlock(&liverpool_samu_mutex);
+		ps4_samu_unlock();
 		return r;
 	}
 	stat = readl(adev->rmmio + LIVERPOOL_SAMU_STAT);
 	mutex_unlock(&liverpool_samu_mutex);
+	ps4_samu_unlock();
 	return stat ? -EIO : 0;
 }
 
