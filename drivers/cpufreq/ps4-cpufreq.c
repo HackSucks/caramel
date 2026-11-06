@@ -151,4 +151,4 @@ static int __init ps4_cpufreq_init(void)
 device_initcall(ps4_cpufreq_init);
 
 MODULE_AUTHOR("Armandas Kvietkus <armandas.kvietkus@proton.me>");
-MODULE_DESCRIPTION("cpufreq driver for PS4 (AMD Jaguar, Family 16h)");
+MODULE_DESCRIPTION("cpufreq driver for PS4 (Family 16h)");
