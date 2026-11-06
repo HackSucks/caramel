@@ -330,27 +330,11 @@ static const struct sdhci_pci_fixes sdhci_intel_qrk = {
 };
 
 #ifdef CONFIG_X86_PS4
-static int aeolia_assign_irqs(struct sdhci_pci_slot *slot)
-{
-	if (slot->chip->pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_SDHCI)
-		return bpcie_assign_irqs(slot->chip->pdev, 1);
-	return apcie_assign_irqs(slot->chip->pdev, 1);
-}
-
-static void aeolia_free_irqs(struct sdhci_pci_slot *slot)
-{
-	if (slot->chip->pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_SDHCI) {
-		bpcie_free_irqs(slot->host->irq, 1);
-		return;
-	}
-	apcie_free_irqs(slot->host->irq, 1);
-}
-
 static int aeolia_probe(struct sdhci_pci_chip *chip)
 {
 	chip->num_slots = 1;
 	chip->first_bar = 0;
-	if (apcie_status() == 0)
+	if (ps4sb_status() == 0)
 		return -EPROBE_DEFER;
 
 	chip->pdev->class &= ~0x0000FF;
@@ -360,7 +344,7 @@ static int aeolia_probe(struct sdhci_pci_chip *chip)
 
 static int aeolia_probe_slot(struct sdhci_pci_slot *slot)
 {
-	int err = aeolia_assign_irqs(slot);
+	int err = ps4sb_assign_irqs(slot->chip->pdev, 1);
 	if (err <= 0) {
 		dev_err(&slot->chip->pdev->dev, "failed to get IRQ: %d\n", err);
 		return -ENODEV;
@@ -397,7 +381,7 @@ static int aeolia_probe_slot(struct sdhci_pci_slot *slot)
 
 static void aeolia_remove_slot(struct sdhci_pci_slot *slot, int dead)
 {
-	aeolia_free_irqs(slot);
+	ps4sb_free_irqs(slot->host->irq, 1);
 }
 
 static int aeolia_enable_dma(struct sdhci_pci_slot *slot)

@@ -651,7 +651,7 @@ static int mts_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			 netdev->dev_addr);
 	}
 
-	ret = bpcie_assign_irqs(pdev, 1);
+	ret = ps4sb_assign_irqs(pdev, 1);
 	if (ret < 0) {
 		mts_glue_unmap(p);
 		return ret == -ENODEV ? -EPROBE_DEFER : ret;

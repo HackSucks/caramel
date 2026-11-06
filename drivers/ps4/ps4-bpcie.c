@@ -406,7 +406,6 @@ static int bpcie_glue_resume(struct bpcie_dev *sc) {
 #ifdef CONFIG_PM
 #endif
 
-extern bool bpcie_initialized;
 
 static const struct ps4sb_family baikal_family = {
 	.name			= "Baikal",
@@ -421,6 +420,10 @@ static const struct ps4sb_family baikal_family = {
 	.icc_usb_power		= true,
 	.i2c_data_off		= 8,
 	.i2c_err_off		= 0,
+	.rtc_bar		= 4,
+	.rtc_reg		= 0x50d0,
+	.rtc_status		= 0x50cc,
+	.rtc_epoch		= 1325376000LL,
 };
 
 static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
@@ -461,12 +464,12 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		goto free_bars;
 	if (ps4sb_uart_init(sc) < 0)
 		sc_err("uart not registered\n");
-	if (bpcie_rtc_init(sc) < 0)
+	if (ps4sb_rtc_init(sc) < 0)
 		sc_err("rtc not registered\n");
 	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_uart;
 
-	WRITE_ONCE(bpcie_initialized, true);
+	WRITE_ONCE(ps4sb_initialized, true);
 	return 0;
 
 remove_uart:
@@ -489,7 +492,7 @@ static void bpcie_remove(struct pci_dev *dev) {
 	struct bpcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	WRITE_ONCE(bpcie_initialized, false);
+	WRITE_ONCE(ps4sb_initialized, false);
 	ps4sb_icc_remove(sc);
 	ps4sb_uart_remove(sc);
 	bpcie_glue_remove(sc);

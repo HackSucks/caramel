@@ -61,6 +61,11 @@ struct ps4sb_family {
 	bool icc_boot_led;
 	u8 i2c_data_off;
 	u8 i2c_err_off;
+	unsigned int rtc_bar;
+	u32 rtc_reg;
+	u32 rtc_status;
+	bool rtc_byte_regs;
+	s64 rtc_epoch;
 };
 
 struct ps4sb_icc_dev {
@@ -139,6 +144,14 @@ void ps4sb_uart_suspend(struct ps4sb_dev *sc, pm_message_t state);
 void ps4sb_uart_resume(struct ps4sb_dev *sc);
 void ps4sb_icc_suspend(struct ps4sb_dev *sc, pm_message_t state);
 void ps4sb_icc_resume(struct ps4sb_dev *sc);
+#endif
+#ifdef CONFIG_RTC_CLASS
+int ps4sb_rtc_init(struct ps4sb_dev *sc);
+#else
+static inline int ps4sb_rtc_init(struct ps4sb_dev *sc)
+{
+	return 0;
+}
 #endif
 int icc_i2c_init(struct ps4sb_dev *sc);
 void icc_i2c_remove(struct ps4sb_dev *sc);

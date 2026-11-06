@@ -84,24 +84,6 @@ static int xhci_aeolia_irqnum(struct aeolia_xhci *axhci,
 	return dev->irq + index;
 }
 
-static int xhci_aeolia_assign_irqs(struct pci_dev *dev)
-{
-	if (xhci_aeolia_is_baikal(dev))
-		return bpcie_assign_irqs(dev, NR_DEVICES);
-
-	return apcie_assign_irqs(dev, NR_DEVICES);
-}
-
-static void xhci_aeolia_free_irqs(struct pci_dev *dev, int nr_irqs)
-{
-	if (xhci_aeolia_is_baikal(dev)) {
-		bpcie_free_irqs(dev->irq, nr_irqs);
-		return;
-	}
-
-	apcie_free_irqs(dev->irq, nr_irqs);
-}
-
 static int xhci_aeolia_probe_one(struct pci_dev *dev, int index)
 {
 	int retval;
@@ -441,7 +423,7 @@ static int xhci_aeolia_probe(struct pci_dev *dev, const struct pci_device_id *id
 	bool ahci_started = false;
 	struct aeolia_xhci *axhci;
 
-	if (apcie_status() == 0)
+	if (ps4sb_status() == 0)
 		return -EPROBE_DEFER;
 
 	if (pci_enable_device(dev) < 0)
@@ -454,7 +436,7 @@ static int xhci_aeolia_probe(struct pci_dev *dev, const struct pci_device_id *id
 	}
 	pci_set_drvdata(dev, axhci);
 
-	axhci->nr_irqs = retval = xhci_aeolia_assign_irqs(dev);
+	axhci->nr_irqs = retval = ps4sb_assign_irqs(dev, NR_DEVICES);
 	if (retval < 0) {
 		goto free_axhci;
 	}
@@ -501,7 +483,7 @@ remove_hcds:
 	if (ahci_started)
 		ahci_remove_one(dev);
 free_irqs:
-	xhci_aeolia_free_irqs(dev, axhci->nr_irqs);
+	ps4sb_free_irqs(dev->irq, axhci->nr_irqs);
 free_axhci:
 	pci_set_drvdata(dev, NULL);
 	kfree(axhci);
@@ -526,7 +508,7 @@ static void xhci_aeolia_remove(struct pci_dev *dev)
 	if (dev->device == PCI_DEVICE_ID_SONY_BELIZE_XHCI ||
 	    xhci_aeolia_is_baikal(dev))
 		ahci_remove_one(dev);
-	xhci_aeolia_free_irqs(dev, axhci->nr_irqs);
+	ps4sb_free_irqs(dev->irq, axhci->nr_irqs);
 
 	pci_set_drvdata(dev, NULL);
 	kfree(axhci);
