@@ -172,6 +172,22 @@ mtk_cfg80211_change_iface(struct wiphy *wiphy,
 
 /* TODO: link_id 's in this file were added only after Linux 6.0.
  * Add #if preprocessor directives here. See os/linux/gl_cfg80211.c ; */
+#if KERNEL_VERSION(6, 7, 0) <= CFG80211_VERSION_CODE
+int
+mtk_cfg80211_add_key(struct wiphy *wiphy,
+		     struct wireless_dev *wdev, int link_id,
+		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
+
+int
+mtk_cfg80211_get_key(struct wiphy *wiphy,
+		     struct wireless_dev *wdev, int link_id,
+		     u8 key_index,
+		     bool pairwise,
+		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *));
+
+int
+mtk_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+#else
 int
 mtk_cfg80211_add_key(struct wiphy *wiphy,
 		     struct net_device *ndev, int link_id,
@@ -186,11 +202,14 @@ mtk_cfg80211_get_key(struct wiphy *wiphy,
 
 int
 mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+#endif
 
 int
 mtk_cfg80211_set_default_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool unicast, bool multicast);
 
-#if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+#if KERNEL_VERSION(6, 7, 0) <= CFG80211_VERSION_CODE
+int mtk_cfg80211_get_station(struct wiphy *wiphy, struct wireless_dev *wdev, const u8 *mac, struct station_info *sinfo);
+#elif KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
 int mtk_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev, const u8 *mac, struct station_info *sinfo);
 #else
 int mtk_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev, u8 *mac, struct station_info *sinfo);
@@ -285,7 +304,24 @@ int mtk_cfg80211_sched_scan_stop(IN struct wiphy *wiphy, IN struct net_device *n
 
 int mtk_cfg80211_assoc(struct wiphy *wiphy, struct net_device *ndev, struct cfg80211_assoc_request *req);
 
-#if KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
+#if KERNEL_VERSION(6, 7, 0) <= CFG80211_VERSION_CODE
+int
+mtk_cfg80211_change_station(struct wiphy *wiphy, struct wireless_dev *wdev,
+			    const u8 *mac, struct station_parameters *params);
+
+int mtk_cfg80211_add_station(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     const u8 *mac, struct station_parameters *params);
+
+int mtk_cfg80211_del_station(struct wiphy *wiphy, struct wireless_dev *wdev, struct station_del_parameters *params);
+
+int mtk_cfg80211_tdls_mgmt(struct wiphy *wiphy, struct net_device *dev,
+			   const u8 *peer, int link_id, u8 action_code,
+			   u8 dialog_token, u16 status_code, u32 peer_capability,
+			   bool initiator, const u8 *buf, size_t len);
+
+int mtk_cfg80211_tdls_oper(struct wiphy *wiphy, struct net_device *dev,
+			   const u8 *peer, enum nl80211_tdls_operation oper);
+#elif KERNEL_VERSION(3, 16, 0) <= CFG80211_VERSION_CODE
 int
 mtk_cfg80211_change_station(struct wiphy *wiphy, struct net_device *ndev,
 			    const u8 *mac, struct station_parameters *params);
