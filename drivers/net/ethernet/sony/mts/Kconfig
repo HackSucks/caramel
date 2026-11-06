@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config MTS
 	tristate "PlayStation 4 Baikal Gigabit Ethernet"
-	depends on PCI && X86_PS4_BAIKAL
+	depends on PCI && X86_PS4
 	help
 	  Driver for the Sony mts Gigabit Ethernet controller (104d:90d8)
 	  in the Baikal southbridge of the PlayStation 4.

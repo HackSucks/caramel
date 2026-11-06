@@ -616,13 +616,6 @@ config PS4_ICCNODE
 	help
 	  Enable userspace /dev/icc character device node and ioctl interface.
 
-config X86_PS4_BAIKAL
-	bool "Sony PlayStation 4 Baikal southbridge support"
-	depends on X86_PS4
-	help
-	  Enable support for the Baikal southbridge used by PlayStation 4
-	  Slim and Pro systems.
-
 config PS4_CCP
 	bool "PS4 SAMU CCP hardware crypto engine"
 	depends on X86_PS4

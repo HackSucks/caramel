@@ -21,6 +21,7 @@
 #include <linux/kmemleak.h>
 #include <linux/cc_platform.h>
 #include <linux/iopoll.h>
+#include <asm/ps4.h>
 #include <asm/pci-direct.h>
 #include <asm/iommu.h>
 #include <asm/apic.h>
@@ -2016,14 +2017,10 @@ static int __init init_iommu_one_late(struct amd_iommu *iommu)
 
 	init_translation_status(iommu);
 	if (translation_pre_enabled(iommu) && !is_kdump_kernel()) {
-#ifdef CONFIG_X86_PS4_BAIKAL
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
-		    boot_cpu_data.x86 == 0x16) {
+		if (ps4_is_baikal()) {
 			pr_info("AMD-Vi: PS4 Baikal: IOMMU:%d pre-enabled, preserving state\n",
 				iommu->index);
-		} else
-#endif
-		{
+		} else {
 			iommu_disable(iommu);
 			clear_translation_pre_enabled(iommu);
 			pr_warn("Translation was enabled for IOMMU:%d but we are not in kdump mode\n",
@@ -3398,14 +3395,9 @@ static int __init early_amd_iommu_init(void)
 	}
 
 	/* Disable any previously enabled IOMMUs */
-#ifdef CONFIG_X86_PS4_BAIKAL
-	if (amd_iommu_pre_enabled &&
-	    boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
-	    boot_cpu_data.x86 == 0x16) {
+	if (amd_iommu_pre_enabled && ps4_is_baikal())
 		pr_info("AMD-Vi: PS4 Baikal: keeping IOMMU enabled to preserve IR tables\n");
-	} else
-#endif
-	if (!is_kdump_kernel())
+	else if (!is_kdump_kernel())
 		disable_iommus();
 
 	#ifndef CONFIG_X86_PS4
@@ -3811,11 +3803,8 @@ void __init amd_iommu_detect(void)
 {
 	int ret;
 
-#ifdef CONFIG_X86_PS4_BAIKAL
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
-	    boot_cpu_data.x86 == 0x16)
+	if (ps4_is_baikal())
 		goto disable_snp;
-#endif
 
 	ret = iommu_go_to_state(IOMMU_IVRS_DETECTED);
 	if (ret)

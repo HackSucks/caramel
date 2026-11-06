@@ -21,6 +21,7 @@
 #include <asm/i8259.h>
 #include <asm/pc-conf-reg.h>
 #include <asm/pci_x86.h>
+#include <asm/ps4.h>
 
 #define PIRQ_SIGNATURE	(('$' << 0) + ('P' << 8) + ('I' << 16) + ('R' << 24))
 #define PIRQ_VERSION 0x0100
@@ -1716,9 +1717,8 @@ static int pirq_enable_irq(struct pci_dev *dev)
 {
 	u8 pin = 0;
 
-	if (!boot_cpu_has(X86_FEATURE_HYPERVISOR) && boot_cpu_data.x86_vendor == X86_VENDOR_AMD && boot_cpu_data.x86 == 0x16) {
+	if (ps4_is_baikal())
 		return 0;
-	}
 
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
 	if (pin && !pcibios_lookup_irq(dev, 1)) {
