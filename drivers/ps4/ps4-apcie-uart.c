@@ -7,6 +7,7 @@
 int apcie_uart_init(struct apcie_dev *sc); /* Don't know why the compiler complains about prototypes despite the definition*/
 void apcie_uart_remove(struct apcie_dev *sc);
 
+#ifdef CONFIG_SERIAL_8250
 int apcie_uart_init(struct apcie_dev *sc)
 {
 	int i;
@@ -68,4 +69,25 @@ void apcie_uart_resume(struct apcie_dev *sc)
 		if (sc->serial_line[i] >= 0)
 			serial8250_resume_port(sc->serial_line[i]);
 }
+#endif
+
+#else
+int apcie_uart_init(struct apcie_dev *sc)
+{
+	return 0;
+}
+
+void apcie_uart_remove(struct apcie_dev *sc)
+{
+}
+
+#ifdef CONFIG_PM
+void apcie_uart_suspend(struct apcie_dev *sc, pm_message_t state)
+{
+}
+
+void apcie_uart_resume(struct apcie_dev *sc)
+{
+}
+#endif
 #endif
