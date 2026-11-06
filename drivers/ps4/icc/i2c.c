@@ -2,10 +2,14 @@
 #include <linux/serial_core.h>
 #include <linux/serial_reg.h>
 
+#include <asm/ps4.h>
+
 #include "../aeolia.h"
 
 #define ICC_MAX_READ_DATA 0xff
 #define ICC_MAX_WRITE_DATA 0xf8
+#define ICC_REPLY_HEADER_SIZE 0x14
+#define ICC_REPLY_ERROR_OFF 0x0c
 
 u32 icc_i2c_functionality(struct i2c_adapter *adap);
 int icc_i2c_init(struct apcie_dev *sc);
@@ -41,7 +45,9 @@ static int icc_i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
 	struct apcie_dev *sc = i2c_get_adapdata(adapter);
 	int ret;
 	struct icc_i2c_msg msg;
-	u8 resultbuf[8 + ICC_MAX_READ_DATA];
+	u8 resultbuf[ICC_REPLY_HEADER_SIZE + ICC_MAX_READ_DATA];
+	int data_off = ICC_REPLY_HEADER_SIZE;
+	int err_off = ICC_REPLY_ERROR_OFF;
 
 	msg.code = 4; /* Don't really know what this is */
 	msg.count = 1;
@@ -93,28 +99,34 @@ static int icc_i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
 	}
 
 	msg.length = msg.cmd.length + 4;
+#ifdef CONFIG_X86_PS4_BAIKAL
+	if (bpcie_status() > 0) {
+		data_off = 8;
+		err_off = 0;
+	}
+#endif
 	ret = apcie_icc_cmd(0x10, 0x0, &msg, msg.length, resultbuf,
 		      sizeof(resultbuf));
-	if (ret < 2 || ret > sizeof(resultbuf)) {
+	if (ret < err_off + 2 || ret > sizeof(resultbuf)) {
 		sc_err("icc-i2c: icc command failed: %d\n", ret);
 		return -EIO;
 	}
-	if (resultbuf[0] != 0 || resultbuf[1] != 0) {
+	if (resultbuf[err_off] != 0 || resultbuf[err_off + 1] != 0) {
 		sc_err("icc-i2c: i2c command failed: %d, %d\n",
-		       resultbuf[0], resultbuf[1]);
+		       resultbuf[err_off], resultbuf[err_off + 1]);
 		return -EIO;
 	}
 
 	if (read_write == I2C_SMBUS_READ)
 		switch (size) {
 		case I2C_SMBUS_BYTE_DATA:
-			data->byte = resultbuf[8];
+			data->byte = resultbuf[data_off];
 			break;
 		case I2C_SMBUS_WORD_DATA:
-			data->word = resultbuf[8] | (resultbuf[9] << 8);
+			data->word = resultbuf[data_off] | (resultbuf[data_off + 1] << 8);
 			break;
 		case I2C_SMBUS_I2C_BLOCK_DATA:
-			memcpy(&data->block[1], &resultbuf[8],
+			memcpy(&data->block[1], &resultbuf[data_off],
 			       data->block[0]);
 			break;
 		}
