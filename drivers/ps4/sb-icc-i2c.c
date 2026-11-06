@@ -4,15 +4,15 @@
 
 #include <asm/ps4.h>
 
-#include "../aeolia.h"
+#include "ps4sb.h"
 
 #define ICC_MAX_READ_DATA 0xff
 #define ICC_MAX_WRITE_DATA 0xf8
 #define ICC_REPLY_HEADER_SIZE 0x14
 
 u32 icc_i2c_functionality(struct i2c_adapter *adap);
-int icc_i2c_init(struct apcie_dev *sc);
-void icc_i2c_remove(struct apcie_dev *sc);
+int icc_i2c_init(struct ps4sb_dev *sc);
+void icc_i2c_remove(struct ps4sb_dev *sc);
 
 
 /* This is actually multiple nested variable length structures, but since we
@@ -41,7 +41,7 @@ static int icc_i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
 			  char read_write, u8 command, int size,
 			  union i2c_smbus_data *data)
 {
-	struct apcie_dev *sc = i2c_get_adapdata(adapter);
+	struct ps4sb_dev *sc = i2c_get_adapdata(adapter);
 	int ret;
 	struct icc_i2c_msg msg;
 	u8 resultbuf[ICC_REPLY_HEADER_SIZE + ICC_MAX_READ_DATA];
@@ -140,7 +140,7 @@ static const struct i2c_algorithm icc_i2c_algo = {
 };
 
 
-int icc_i2c_init(struct apcie_dev *sc)
+int icc_i2c_init(struct ps4sb_dev *sc)
 {
 	struct i2c_adapter *i2c;
 	int ret;
@@ -160,7 +160,7 @@ int icc_i2c_init(struct apcie_dev *sc)
 	return 0;
 }
 
-void icc_i2c_remove(struct apcie_dev *sc)
+void icc_i2c_remove(struct ps4sb_dev *sc)
 {
 	i2c_del_adapter(&sc->icc.i2c);
 }

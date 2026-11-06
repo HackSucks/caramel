@@ -56,17 +56,17 @@ EXPORT_SYMBOL_GPL(ps4sb_status);
 
 int ps4sb_assign_irqs(struct pci_dev *dev, int nvec)
 {
-	return is_baikal ? bpcie_assign_irqs(dev, nvec) :
-			   apcie_assign_irqs(dev, nvec);
+	return is_baikal ? baikal_assign_irqs(dev, nvec) :
+			   aeolia_assign_irqs(dev, nvec);
 }
 EXPORT_SYMBOL_GPL(ps4sb_assign_irqs);
 
 void ps4sb_free_irqs(unsigned int virq, unsigned int nr_irqs)
 {
 	if (is_baikal)
-		bpcie_free_irqs(virq, nr_irqs);
+		baikal_free_irqs(virq, nr_irqs);
 	else
-		apcie_free_irqs(virq, nr_irqs);
+		aeolia_free_irqs(virq, nr_irqs);
 }
 EXPORT_SYMBOL_GPL(ps4sb_free_irqs);
 

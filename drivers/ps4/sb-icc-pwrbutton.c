@@ -1,14 +1,14 @@
 #include <linux/input.h>
 #include <asm/ps4.h>
-#include "aeolia.h"
+#include "ps4sb.h"
 
 /* Prototype declarations */
-void icc_pwrbutton_trigger(struct apcie_dev *sc, int state);
-int icc_pwrbutton_init(struct apcie_dev *sc);
-void icc_pwrbutton_remove(struct apcie_dev *sc);
+void icc_pwrbutton_trigger(struct ps4sb_dev *sc, int state);
+int icc_pwrbutton_init(struct ps4sb_dev *sc);
+void icc_pwrbutton_remove(struct ps4sb_dev *sc);
 /* ---------------------- */ //this file just felt very empty at the top hence the comments
 
-void icc_pwrbutton_trigger(struct apcie_dev *sc, int state)
+void icc_pwrbutton_trigger(struct ps4sb_dev *sc, int state)
 {
 	if (sc->icc.pwrbutton_dev) {
 		input_report_key(sc->icc.pwrbutton_dev, KEY_POWER, state ? 1 : 0);
@@ -16,7 +16,7 @@ void icc_pwrbutton_trigger(struct apcie_dev *sc, int state)
 	}
 }
 
-int icc_pwrbutton_init(struct apcie_dev *sc)
+int icc_pwrbutton_init(struct ps4sb_dev *sc)
 {
 	int ret = 0;
 	u16 button;
@@ -68,7 +68,7 @@ int icc_pwrbutton_init(struct apcie_dev *sc)
 	return 0;
 }
 
-void icc_pwrbutton_remove(struct apcie_dev *sc)
+void icc_pwrbutton_remove(struct ps4sb_dev *sc)
 {
 	if (sc->icc.pwrbutton_dev)
 		input_unregister_device(sc->icc.pwrbutton_dev);

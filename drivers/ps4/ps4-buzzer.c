@@ -3,7 +3,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/mutex.h>
-#include "aeolia.h"
+#include "ps4sb.h"
 #include "ps4-buzzer.h"
 
 static DEFINE_MUTEX(ps4_buzzer_lock);
