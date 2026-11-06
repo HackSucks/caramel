@@ -276,7 +276,7 @@ static int ps4_led_probe(struct platform_device *pdev)
 		}
 	}
 
-	boot_payload = bpcie_status() > 0 ? led_violet_blue : led_purple;
+	boot_payload = ps4_is_baikal() ? led_violet_blue : led_purple;
 
 	memset(reply, 0, sizeof(reply));
 	ret = ps4sb_icc_cmd(PS4_LED_ICC_MAJOR, PS4_LED_ICC_MINOR,

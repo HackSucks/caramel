@@ -31,8 +31,7 @@
 
 static bool is_ps4;
 static bool is_baikal;
-bool apcie_initialized;
-bool bpcie_initialized;
+bool ps4sb_initialized;
 
 /*
  * The RTC is part of the Aeolia PCI device and will be implemented there as
@@ -47,25 +46,29 @@ static int dummy_set_wallclock(const struct timespec64 *now)
 	return -ENODEV;
 }
 
-/*
- * Provide a way for generic drivers to query for the availability of the
- * PS4 apcie driver/device, which is a dependency for them.
- */
-int apcie_status(void)
+int ps4sb_status(void)
 {
 	if (!is_ps4)
 		return -ENODEV;
-	return READ_ONCE(apcie_initialized) || READ_ONCE(bpcie_initialized);
+	return READ_ONCE(ps4sb_initialized);
 }
-EXPORT_SYMBOL_GPL(apcie_status);
+EXPORT_SYMBOL_GPL(ps4sb_status);
 
-int bpcie_status(void)
+int ps4sb_assign_irqs(struct pci_dev *dev, int nvec)
 {
-	if (!is_ps4)
-		return -ENODEV;
-	return READ_ONCE(bpcie_initialized);
+	return is_baikal ? bpcie_assign_irqs(dev, nvec) :
+			   apcie_assign_irqs(dev, nvec);
 }
-EXPORT_SYMBOL_GPL(bpcie_status);
+EXPORT_SYMBOL_GPL(ps4sb_assign_irqs);
+
+void ps4sb_free_irqs(unsigned int virq, unsigned int nr_irqs)
+{
+	if (is_baikal)
+		bpcie_free_irqs(virq, nr_irqs);
+	else
+		apcie_free_irqs(virq, nr_irqs);
+}
+EXPORT_SYMBOL_GPL(ps4sb_free_irqs);
 
 bool ps4_is_baikal(void)
 {

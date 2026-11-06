@@ -4896,7 +4896,7 @@ static int sky2_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	#ifdef CONFIG_X86_PS4
 	/* This will return negative on non-PS4 platforms */
-	if (apcie_status() == 0)
+	if (ps4sb_status() == 0)
 		return -EPROBE_DEFER;
 	#endif
 
@@ -5027,10 +5027,10 @@ static int sky2_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY &&
-	    apcie_assign_irqs(pdev, 1) > 0) {
+	    ps4sb_assign_irqs(pdev, 1) > 0) {
 		err = sky2_test_msi(hw);
 		if (err) {
-			apcie_free_irqs(pdev->irq, 1);
+			ps4sb_free_irqs(pdev->irq, 1);
 			/* PS4 requires MSI, so if it fails, bail out. */
 			goto err_out_free_netdev;
 		}
@@ -5096,7 +5096,7 @@ err_out_unregister:
 err_out_free_netdev:
 	#ifdef CONFIG_X86_PS4
 	if (hw->flags & SKY2_HW_USE_AEOLIA_MSI)
-		apcie_free_irqs(pdev->irq, 1);
+		ps4sb_free_irqs(pdev->irq, 1);
 	else
 	#endif
 		if (hw->flags & SKY2_HW_USE_MSI)
@@ -5150,7 +5150,7 @@ static void sky2_remove(struct pci_dev *pdev)
 
 	#ifdef CONFIG_X86_PS4
 	if (hw->flags & SKY2_HW_USE_AEOLIA_MSI)
-		apcie_free_irqs(pdev->irq, 1);
+		ps4sb_free_irqs(pdev->irq, 1);
 	else
 	#endif
 

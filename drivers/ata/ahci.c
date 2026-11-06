@@ -2731,11 +2731,7 @@ static void ahci_init_irq(struct pci_dev *pdev, unsigned int n_ports,
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-		if (pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
-			bpcie_assign_irqs(pdev, n_ports);
-			return;
-		}
-		apcie_assign_irqs(pdev, n_ports);
+		ps4sb_assign_irqs(pdev, n_ports);
 		return;
 	}
 	#endif
@@ -2946,7 +2942,7 @@ static int ahci_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	
 	#ifdef CONFIG_X86_PS4
 	/* This will return negative on non-PS4 platforms */
-	if (apcie_status() == 0)
+	if (ps4sb_status() == 0)
 		return -EPROBE_DEFER;
 
 	if (pdev->vendor == PCI_VENDOR_ID_SONY &&
@@ -3245,11 +3241,7 @@ static void ahci_remove_one(struct pci_dev *pdev)
 
 	#ifdef CONFIG_X86_PS4
 	if (pdev->vendor == PCI_VENDOR_ID_SONY) {
-		if (pdev->device == PCI_DEVICE_ID_SONY_BAIKAL_AHCI) {
-			bpcie_free_irqs(pdev->irq, 1);
-			return;
-		}
-		apcie_free_irqs(pdev->irq, 1);
+		ps4sb_free_irqs(pdev->irq, 1);
 	}
 	#endif
 }
