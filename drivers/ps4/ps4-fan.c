@@ -34,7 +34,7 @@ static int icc_read_apu_temp(long *temp_mc)
 	int ret;
 
 	memset(reply, 0, sizeof(reply));
-	ret = apcie_icc_cmd(PS4_FAN_TEMP_ICC_MAJOR, PS4_FAN_TEMP_ICC_MINOR,
+	ret = ps4sb_icc_cmd(PS4_FAN_TEMP_ICC_MAJOR, PS4_FAN_TEMP_ICC_MINOR,
 			    NULL, 0, reply, sizeof(reply));
 	if (ret < 0)
 		return ret;
@@ -51,7 +51,7 @@ static int icc_read_fan_threshold(long *thresh_mc)
 	int ret;
 
 	memset(reply, 0, sizeof(reply));
-	ret = apcie_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_GET,
+	ret = ps4sb_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_GET,
 			    NULL, 0, reply, sizeof(reply));
 	if (ret < 0)
 		return ret;
@@ -79,7 +79,7 @@ static int icc_write_fan_threshold(long thresh_mc)
 	thresh_c = (u8)(thresh_mc / 1000L);
 
 	memset(config, 0, sizeof(config));
-	ret = apcie_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_GET,
+	ret = ps4sb_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_GET,
 			    NULL, 0, config, sizeof(config));
 	if (ret < 0)
 		return ret;
@@ -89,7 +89,7 @@ static int icc_write_fan_threshold(long thresh_mc)
 	config[PS4_FAN_THRESH_BYTE] = thresh_c;
 
 	memset(reply, 0, sizeof(reply));
-	ret = apcie_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_SET,
+	ret = ps4sb_icc_cmd(PS4_FAN_ICC_MAJOR, PS4_FAN_ICC_MINOR_SET,
 			    config, PS4_FAN_CONFIG_LEN,
 			    reply, sizeof(reply));
 	if (ret < 0)
