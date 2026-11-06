@@ -14,36 +14,36 @@
 #include <asm/msi.h>
 #include <asm/ps4.h>
 
-#include "baikal.h"
+#include "ps4sb.h"
 
-#define APCIE_REG_CHIPID_0		0x1104
-#define APCIE_REG_CHIPID_1		0x1108
-#define APCIE_REG_CHIPREV		0x110c
+#define AEOLIA_REG_CHIPID_0		0x1104
+#define AEOLIA_REG_CHIPID_1		0x1108
+#define AEOLIA_REG_CHIPREV		0x110c
 
 static const int subfuncs_per_func[BAIKAL_NUM_FUNCS] = {
 	2, 1, 1, 1, 31, 2, 3, 3
 };
 
-static void bpcie_msi_domain_set_desc(msi_alloc_info_t *arg, struct msi_desc *desc);
+static void baikal_msi_domain_set_desc(msi_alloc_info_t *arg, struct msi_desc *desc);
 
-u32 glue_read32(struct bpcie_dev *sc, u32 offset) {
+static u32 glue_read32(struct ps4sb_dev *sc, u32 offset) {
 	return ioread32(sc->bar2 + offset);
 }
 
-void glue_write32(struct bpcie_dev *sc, u32 offset, u32 value) {
+static void glue_write32(struct ps4sb_dev *sc, u32 offset, u32 value) {
 	iowrite32(value, sc->bar2 + offset);
 }
 
-static void bpcie_msi_write_msg(struct irq_data *data, struct msi_msg *msg)
+static void baikal_msi_write_msg(struct irq_data *data, struct msi_msg *msg)
 {
-	struct bpcie_dev *sc = data->chip_data;
+	struct ps4sb_dev *sc = data->chip_data;
 	struct msi_desc *desc;
 
 	if (!msg->address_lo) {
 		return;
 	}
 
-	dev_dbg(&sc->pdev->dev, "bpcie_msi_write_msg(%08x, %08x) mask=0x%x irq=%d hwirq=0x%lx %p\n",
+	dev_dbg(&sc->pdev->dev, "baikal_msi_write_msg(%08x, %08x) mask=0x%x irq=%d hwirq=0x%lx %p\n",
 	       msg->address_lo, msg->data, data->mask, data->irq, data->hwirq, sc);
 
 	desc = irq_data_get_msi_desc(data);
@@ -53,7 +53,7 @@ static void bpcie_msi_write_msg(struct irq_data *data, struct msi_msg *msg)
 
 void pci_msi_update_mask(struct msi_desc *desc, u32 clear, u32 set);
 
-static bool bpcie_msi_is_xhci_shared(struct irq_data *data)
+static bool baikal_msi_is_xhci_shared(struct irq_data *data)
 {
 	struct msi_desc *desc = irq_data_get_msi_desc(data);
 	struct pci_dev *pdev = msi_desc_to_pci_dev(desc);
@@ -62,41 +62,41 @@ static bool bpcie_msi_is_xhci_shared(struct irq_data *data)
 	       !desc->pci.msi_attrib.is_msix && desc->nvec_used == 1;
 }
 
-static void bpcie_msi_unmask(struct irq_data *data)
+static void baikal_msi_unmask(struct irq_data *data)
 {
-	if (bpcie_msi_is_xhci_shared(data))
+	if (baikal_msi_is_xhci_shared(data))
 		pci_msi_update_mask(irq_data_get_msi_desc(data), 0x7, 0);
 	else
 		pci_msi_unmask_irq(data);
 }
 
-static void bpcie_msi_mask(struct irq_data *data)
+static void baikal_msi_mask(struct irq_data *data)
 {
-	if (bpcie_msi_is_xhci_shared(data))
+	if (baikal_msi_is_xhci_shared(data))
 		pci_msi_update_mask(irq_data_get_msi_desc(data), 0, 0x7);
 	else
 		pci_msi_mask_irq(data);
 }
 
-static struct irq_chip bpcie_msi_controller = {
+static struct irq_chip baikal_msi_controller = {
 	.name = "Baikal-MSI",
-	.irq_unmask = bpcie_msi_unmask,
-	.irq_mask = bpcie_msi_mask,
+	.irq_unmask = baikal_msi_unmask,
+	.irq_mask = baikal_msi_mask,
 	.irq_ack = irq_chip_ack_parent,
 	.irq_set_affinity = msi_domain_set_affinity,
 	.irq_retrigger = irq_chip_retrigger_hierarchy,
 	.irq_compose_msi_msg = irq_msi_compose_msg,
-	.irq_write_msi_msg = bpcie_msi_write_msg,
+	.irq_write_msi_msg = baikal_msi_write_msg,
 	.flags = IRQCHIP_SKIP_SET_WAKE,
 };
 
-static irq_hw_number_t bpcie_msi_get_hwirq(struct msi_domain_info *info,
+static irq_hw_number_t baikal_msi_get_hwirq(struct msi_domain_info *info,
 					   msi_alloc_info_t *arg)
 {
 	return arg->hwirq;
 }
 
-static void bpcie_handle_edge_irq(struct irq_desc *desc)
+static void baikal_handle_edge_irq(struct irq_desc *desc)
 {
 	u32 func = (desc->irq_data.hwirq >> 5) & 7;
 	u32 initial_hwirq = desc->irq_data.hwirq & ~0x1fLL;
@@ -127,9 +127,9 @@ static void bpcie_handle_edge_irq(struct irq_desc *desc)
 	}
 
 	raw_spin_lock(&desc->lock);
-	struct bpcie_dev *sc = desc->irq_data.chip_data;
-	glue_write32(sc, BPCIE_ACK_WRITE, vector_to_write);
-	u32 vector_read = glue_read32(sc, BPCIE_ACK_READ);
+	struct ps4sb_dev *sc = desc->irq_data.chip_data;
+	glue_write32(sc, BAIKAL_ACK_WRITE, vector_to_write);
+	u32 vector_read = glue_read32(sc, BAIKAL_ACK_READ);
 	raw_spin_unlock(&desc->lock);
 
 	unsigned int subfunc_mask = mask & ~(vector_read >> shift);
@@ -156,14 +156,14 @@ static void bpcie_handle_edge_irq(struct irq_desc *desc)
 		handle_edge_irq(desc);
 }
 
-static int bpcie_msi_init(struct irq_domain *domain,
+static int baikal_msi_init(struct irq_domain *domain,
 			 struct msi_domain_info *info, unsigned int virq,
 			 irq_hw_number_t hwirq, msi_alloc_info_t *arg)
 {
-	struct bpcie_dev *sc = info->chip_data;
+	struct ps4sb_dev *sc = info->chip_data;
 
 	irq_domain_set_info(domain, virq, hwirq, info->chip, info->chip_data,
-			bpcie_handle_edge_irq, NULL, "edge");
+			baikal_handle_edge_irq, NULL, "edge");
 
 	if (sc) {
 		int i;
@@ -178,36 +178,36 @@ static int bpcie_msi_init(struct irq_domain *domain,
 	return 0;
 }
 
-static void bpcie_msi_free(struct irq_domain *domain,
+static void baikal_msi_free(struct irq_domain *domain,
 			  struct msi_domain_info *info, unsigned int virq)
 {
-	pr_devel("bpcie_msi_free(%d)\n", virq);
+	pr_devel("baikal_msi_free(%d)\n", virq);
 }
 
-static int bpcie_msi_prepare(struct irq_domain *domain, struct device *dev,
+static int baikal_msi_prepare(struct irq_domain *domain, struct device *dev,
 			     int nvec, msi_alloc_info_t *arg)
 {
 	arg->type = X86_IRQ_ALLOC_TYPE_PCI_MSI;
 	return 0;
 }
 
-static struct msi_domain_ops bpcie_msi_domain_ops = {
-	.get_hwirq	= bpcie_msi_get_hwirq,
-	.msi_init	= bpcie_msi_init,
-	.msi_free	= bpcie_msi_free,
-	.set_desc	= bpcie_msi_domain_set_desc,
-	.msi_prepare = bpcie_msi_prepare,
+static struct msi_domain_ops baikal_msi_domain_ops = {
+	.get_hwirq	= baikal_msi_get_hwirq,
+	.msi_init	= baikal_msi_init,
+	.msi_free	= baikal_msi_free,
+	.set_desc	= baikal_msi_domain_set_desc,
+	.msi_prepare = baikal_msi_prepare,
 };
 
-static struct msi_domain_info bpcie_msi_domain_info = {
+static struct msi_domain_info baikal_msi_domain_info = {
 	.flags		= MSI_FLAG_USE_DEF_DOM_OPS | MSI_FLAG_USE_DEF_CHIP_OPS | MSI_FLAG_ACTIVATE_EARLY | MSI_FLAG_MULTI_PCI_MSI,
-	.ops		= &bpcie_msi_domain_ops,
-	.chip		= &bpcie_msi_controller,
+	.ops		= &baikal_msi_domain_ops,
+	.chip		= &baikal_msi_controller,
 	.bus_token	= DOMAIN_BUS_PCI_DEVICE_MSI,
-	.handler	= bpcie_handle_edge_irq,
+	.handler	= baikal_handle_edge_irq,
 };
 
-static void bpcie_msi_domain_set_desc(msi_alloc_info_t *arg,
+static void baikal_msi_domain_set_desc(msi_alloc_info_t *arg,
 				    struct msi_desc *desc)
 {
 	struct pci_dev *dev = msi_desc_to_pci_dev(desc);
@@ -216,39 +216,39 @@ static void bpcie_msi_domain_set_desc(msi_alloc_info_t *arg,
 	arg->hwirq = (PCI_SLOT(dev->devfn) << 8) | (PCI_FUNC(dev->devfn) << 5);
 
 	#ifndef QEMU_HACK_NO_IOMMU
-		if (!(bpcie_msi_domain_info.flags & MSI_FLAG_MULTI_PCI_MSI)) {
+		if (!(baikal_msi_domain_info.flags & MSI_FLAG_MULTI_PCI_MSI)) {
 			arg->hwirq |= 0x1F;
 		}
 	#endif
 }
 
-static struct irq_domain *bpcie_create_irq_domain(struct bpcie_dev *sc,
+static struct irq_domain *baikal_create_irq_domain(struct ps4sb_dev *sc,
 						  struct pci_dev *pdev)
 {
 	struct irq_domain *parent;
 	struct irq_domain *d;
 
-	dev_info(&pdev->dev, "bpcie_create_irq_domain\n");
+	dev_info(&pdev->dev, "baikal_create_irq_domain\n");
 	if (x86_vector_domain == NULL) {
-		dev_err(&pdev->dev, "bpcie: x86_vector_domain is NULL\n");
+		dev_err(&pdev->dev, "baikal: x86_vector_domain is NULL\n");
 		return NULL;
 	}
 
-	bpcie_msi_domain_info.chip_data = (void *)sc;
-	bpcie_msi_controller.name = "Baikal-MSI";
+	baikal_msi_domain_info.chip_data = (void *)sc;
+	baikal_msi_controller.name = "Baikal-MSI";
 
 	parent = x86_vector_domain;
 
-	d = msi_create_irq_domain(NULL, &bpcie_msi_domain_info, parent);
+	d = msi_create_irq_domain(NULL, &baikal_msi_domain_info, parent);
 	if (d)
 		dev_set_msi_domain(&pdev->dev, d);
 	else
-		dev_err(&pdev->dev, "bpcie: failed to create irq domain\n");
+		dev_err(&pdev->dev, "baikal: failed to create irq domain\n");
 
 	return d;
 }
 
-int bpcie_is_compatible_device(struct pci_dev *dev)
+int baikal_is_compatible_device(struct pci_dev *dev)
 {
 	if (!dev || dev->vendor != PCI_VENDOR_ID_SONY) {
 		return 0;
@@ -256,29 +256,29 @@ int bpcie_is_compatible_device(struct pci_dev *dev)
 	return (dev->device == PCI_DEVICE_ID_SONY_BAIKAL_PCIE);
 }
 
-int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
+int baikal_assign_irqs(struct pci_dev *dev, int nvec)
 {
 	int ret;
 	unsigned int sc_devfn;
 	struct pci_dev *sc_dev;
-	struct bpcie_dev *sc;
+	struct ps4sb_dev *sc;
 
 	sc_devfn = (dev->devfn & ~7) | BAIKAL_FUNC_ID_PCIE;
 	sc_dev = pci_get_slot(dev->bus, sc_devfn);
 
-	if (!bpcie_is_compatible_device(sc_dev)) {
-		dev_err(&dev->dev, "bpcie: this is not a Baikal device\n");
+	if (!baikal_is_compatible_device(sc_dev)) {
+		dev_err(&dev->dev, "baikal: this is not a Baikal device\n");
 		ret = -ENODEV;
 		goto fail;
 	}
 	sc = pci_get_drvdata(sc_dev);
 	if (!sc) {
-		dev_err(&dev->dev, "bpcie: not ready yet, cannot assign IRQs\n");
+		dev_err(&dev->dev, "baikal: not ready yet, cannot assign IRQs\n");
 		ret = -ENODEV;
 		goto fail;
 	}
 
-	dev_dbg(&dev->dev, "bpcie_assign_irqs(%d)\n", nvec);
+	dev_dbg(&dev->dev, "baikal_assign_irqs(%d)\n", nvec);
 
 	if (PCI_FUNC(dev->devfn) != BAIKAL_FUNC_ID_PCIE)
 		nvec = 1;
@@ -288,14 +288,14 @@ int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
 		ret = pci_alloc_irq_vectors(dev, 1, nvec, PCI_IRQ_MSI);
 
 fail:
-	dev_dbg(&dev->dev, "bpcie_assign_irqs returning %d\n", ret);
+	dev_dbg(&dev->dev, "baikal_assign_irqs returning %d\n", ret);
 	if (sc_dev)
 		pci_dev_put(sc_dev);
 	return ret;
 }
-EXPORT_SYMBOL(bpcie_assign_irqs);
+EXPORT_SYMBOL(baikal_assign_irqs);
 
-void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs)
+void baikal_free_irqs(unsigned int virq, unsigned int nr_irqs)
 {
 	struct msi_desc *desc = irq_get_msi_desc(virq);
 	struct pci_dev *pdev = desc ? msi_desc_to_pci_dev(desc) : NULL;
@@ -307,45 +307,45 @@ void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs)
 
 	irq_domain_free_irqs(virq, nr_irqs);
 }
-EXPORT_SYMBOL(bpcie_free_irqs);
+EXPORT_SYMBOL(baikal_free_irqs);
 
-static void bpcie_glue_remove(struct bpcie_dev *sc);
+static void baikal_glue_remove(struct ps4sb_dev *sc);
 
-static struct pci_dev * get_bpcie_device(struct bpcie_dev *sc, u32 bcpie_func) {
+static struct pci_dev * get_baikal_device(struct ps4sb_dev *sc, u32 baikal_func) {
 	unsigned int devfn;
 	struct pci_dev *sc_dev;
 
 	sc_dev = sc->pdev;
-	devfn = (sc_dev->devfn & ~7) | bcpie_func;
+	devfn = (sc_dev->devfn & ~7) | baikal_func;
 	return pci_get_slot(sc_dev->bus, devfn);
 }
 
-static void bpcie_create_irq_domains(struct bpcie_dev *sc) {
+static void baikal_create_irq_domains(struct ps4sb_dev *sc) {
 	int func;
 	for (func = 0; func < BAIKAL_NUM_FUNCS; ++func) {
-		struct pci_dev * bpcie_pdev = get_bpcie_device(sc, func);
-		if (bpcie_pdev) {
-			struct irq_domain * domain = bpcie_create_irq_domain(sc, bpcie_pdev);
+		struct pci_dev * baikal_pdev = get_baikal_device(sc, func);
+		if (baikal_pdev) {
+			struct irq_domain * domain = baikal_create_irq_domain(sc, baikal_pdev);
 			if (func == BAIKAL_FUNC_ID_PCIE) sc->irqdomain = domain;
-			pci_dev_put(bpcie_pdev);
+			pci_dev_put(baikal_pdev);
 		} else
-			sc_err("cannot find bpcie func %d device", func);
+			sc_err("cannot find baikal func %d device", func);
 	}
 }
 
-static int bpcie_glue_init(struct bpcie_dev *sc)
+static int baikal_glue_init(struct ps4sb_dev *sc)
 {
-	sc_info("bpcie glue probe\n");
+	sc_info("baikal glue probe\n");
 
 	if (!request_mem_region(pci_resource_start(sc->pdev, 2), pci_resource_len(sc->pdev, 2),
-				"bpcie.glue")) {
+				"baikal.glue")) {
 		sc_err("Failed to request pcie region\n");
 		return -EBUSY;
 
 	}
 
 	if (!request_mem_region(pci_resource_start(sc->pdev, 4), pci_resource_len(sc->pdev, 4),
-				"bpcie.chipid")) {
+				"baikal.chipid")) {
 		sc_err("Failed to request chipid region\n");
 
 		release_mem_region(pci_resource_start(sc->pdev, 2), pci_resource_len(sc->pdev, 2));
@@ -354,21 +354,21 @@ static int bpcie_glue_init(struct bpcie_dev *sc)
 	}
 
 	sc_info("Baikal chip revision: %08x:%08x:%08x\n",
-		ioread32(sc->bar4 + BPCIE_REG_CHIPID_0),
-		ioread32(sc->bar4 + BPCIE_REG_CHIPID_1),
-		ioread32(sc->bar4 + BPCIE_REG_CHIPREV));
+		ioread32(sc->bar4 + BAIKAL_REG_CHIPID_0),
+		ioread32(sc->bar4 + BAIKAL_REG_CHIPID_1),
+		ioread32(sc->bar4 + BAIKAL_REG_CHIPREV));
 
-	bpcie_create_irq_domains(sc);
+	baikal_create_irq_domains(sc);
 	if (!sc->irqdomain) {
 		sc_err("Failed to create IRQ domain");
-		bpcie_glue_remove(sc);
+		baikal_glue_remove(sc);
 		return -EIO;
 	}
 
-	sc->nvec = pci_alloc_irq_vectors(sc->pdev, BPCIE_SUBFUNC_ICC+1, BPCIE_NUM_SUBFUNCS, PCI_IRQ_MSI);
+	sc->nvec = pci_alloc_irq_vectors(sc->pdev, BAIKAL_SUBFUNC_ICC+1, BAIKAL_NUM_SUBFUNCS, PCI_IRQ_MSI);
 	if (sc->nvec <= 0) {
 		sc_err("Failed to assign IRQs");
-		bpcie_glue_remove(sc);
+		baikal_glue_remove(sc);
 		return -EIO;
 	}
 	sc_dbg("dev->irq=%d nvec=%d\n", sc->pdev->irq, sc->nvec);
@@ -376,11 +376,11 @@ static int bpcie_glue_init(struct bpcie_dev *sc)
 	return 0;
 }
 
-static void bpcie_glue_remove(struct bpcie_dev *sc) {
-	sc_info("bpcie glue remove\n");
+static void baikal_glue_remove(struct ps4sb_dev *sc) {
+	sc_info("baikal glue remove\n");
 
 	if (sc->nvec > 0) {
-		bpcie_free_irqs(sc->pdev->irq, sc->nvec);
+		baikal_free_irqs(sc->pdev->irq, sc->nvec);
 		sc->nvec = 0;
 	}
 
@@ -394,11 +394,11 @@ static void bpcie_glue_remove(struct bpcie_dev *sc) {
 }
 
 #ifdef CONFIG_PM
-static int bpcie_glue_suspend(struct bpcie_dev *sc, pm_message_t state) {
+static int baikal_glue_suspend(struct ps4sb_dev *sc, pm_message_t state) {
 	return 0;
 }
 
-static int bpcie_glue_resume(struct bpcie_dev *sc) {
+static int baikal_glue_resume(struct ps4sb_dev *sc) {
 	return 0;
 }
 #endif
@@ -410,12 +410,12 @@ static int bpcie_glue_resume(struct bpcie_dev *sc) {
 static const struct ps4sb_family baikal_family = {
 	.name			= "Baikal",
 	.uart_bar		= 2,
-	.uart_base		= BPCIE_RGN_UART_BASE,
+	.uart_base		= BAIKAL_RGN_UART_BASE,
 	.uart_clock		= 25000000,
-	.uart_subfunc		= BPCIE_SUBFUNC_UART0,
-	.uart_count		= BPCIE_NR_UARTS,
+	.uart_subfunc		= BAIKAL_SUBFUNC_UART0,
+	.uart_count		= BAIKAL_NR_UARTS,
 	.icc_bar		= 2,
-	.icc_base		= BPCIE_RGN_ICC_BASE,
+	.icc_base		= BAIKAL_RGN_ICC_BASE,
 	.icc_atomic_power	= true,
 	.icc_usb_power		= true,
 	.i2c_data_off		= 8,
@@ -426,22 +426,22 @@ static const struct ps4sb_family baikal_family = {
 	.rtc_epoch		= 1325376000LL,
 };
 
-static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
-	struct bpcie_dev *sc;
+static int baikal_probe(struct pci_dev *dev, const struct pci_device_id *id) {
+	struct ps4sb_dev *sc;
 	int ret;
 
-	dev_dbg(&dev->dev, "bpcie_probe()\n");
+	dev_dbg(&dev->dev, "baikal_probe()\n");
 
 	ret = pci_enable_device(dev);
 	if (ret) {
 		dev_err(&dev->dev,
-			"bpcie_probe(): pci_enable_device failed: %d\n", ret);
+			"baikal_probe(): pci_enable_device failed: %d\n", ret);
 		return ret;
 	}
 
 	sc = kzalloc(sizeof(*sc), GFP_KERNEL);
 	if (!sc) {
-		dev_err(&dev->dev, "bpcie_probe(): alloc sc failed\n");
+		dev_err(&dev->dev, "baikal_probe(): alloc sc failed\n");
 		ret = -ENOMEM;
 		goto disable_dev;
 	}
@@ -460,7 +460,7 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		goto free_bars;
 	}
 
-	if ((ret = bpcie_glue_init(sc)) < 0)
+	if ((ret = baikal_glue_init(sc)) < 0)
 		goto free_bars;
 	if (ps4sb_uart_init(sc) < 0)
 		sc_err("uart not registered\n");
@@ -474,7 +474,7 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 remove_uart:
 	ps4sb_uart_remove(sc);
-	bpcie_glue_remove(sc);
+	baikal_glue_remove(sc);
 free_bars:
 	if (sc->bar0)
 		iounmap(sc->bar0);
@@ -488,14 +488,14 @@ disable_dev:
 	return ret;
 }
 
-static void bpcie_remove(struct pci_dev *dev) {
-	struct bpcie_dev *sc;
+static void baikal_remove(struct pci_dev *dev) {
+	struct ps4sb_dev *sc;
 	sc = pci_get_drvdata(dev);
 
 	WRITE_ONCE(ps4sb_initialized, false);
 	ps4sb_icc_remove(sc);
 	ps4sb_uart_remove(sc);
-	bpcie_glue_remove(sc);
+	baikal_glue_remove(sc);
 
 	if (sc->bar0)
 		iounmap(sc->bar0);
@@ -508,46 +508,46 @@ static void bpcie_remove(struct pci_dev *dev) {
 }
 
 #ifdef CONFIG_PM
-static int bpcie_suspend(struct pci_dev *dev, pm_message_t state) {
-	struct bpcie_dev *sc;
+static int baikal_suspend(struct pci_dev *dev, pm_message_t state) {
+	struct ps4sb_dev *sc;
 	sc = pci_get_drvdata(dev);
 
 	ps4sb_icc_suspend(sc, state);
 	ps4sb_uart_suspend(sc, state);
-	bpcie_glue_suspend(sc, state);
+	baikal_glue_suspend(sc, state);
 	return 0;
 }
 
-static int bpcie_resume(struct pci_dev *dev) {
-	struct bpcie_dev *sc;
+static int baikal_resume(struct pci_dev *dev) {
+	struct ps4sb_dev *sc;
 	sc = pci_get_drvdata(dev);
 
 	ps4sb_icc_resume(sc);
-	bpcie_glue_resume(sc);
+	baikal_glue_resume(sc);
 	ps4sb_uart_resume(sc);
 	return 0;
 }
 #endif
 
-static const struct pci_device_id bpcie_pci_tbl[] = {
+static const struct pci_device_id baikal_pci_tbl[] = {
 	{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_BAIKAL_PCIE), },
 	{ }
 };
-MODULE_DEVICE_TABLE(pci, bpcie_pci_tbl);
+MODULE_DEVICE_TABLE(pci, baikal_pci_tbl);
 
-static struct pci_driver bpcie_driver = {
+static struct pci_driver baikal_driver = {
 	.name		= "baikal_pcie",
-	.id_table	= bpcie_pci_tbl,
-	.probe		= bpcie_probe,
-	.remove		= bpcie_remove,
+	.id_table	= baikal_pci_tbl,
+	.probe		= baikal_probe,
+	.remove		= baikal_remove,
 #ifdef CONFIG_PM
-	.suspend	= bpcie_suspend,
-	.resume		= bpcie_resume,
+	.suspend	= baikal_suspend,
+	.resume		= baikal_resume,
 #endif
 };
-module_pci_driver(bpcie_driver);
+module_pci_driver(baikal_driver);
 
-static void bpcie_ahci_rmw(void __iomem *mmio, u32 offset, u32 mask, u32 set)
+static void baikal_ahci_rmw(void __iomem *mmio, u32 offset, u32 mask, u32 set)
 {
 	u32 val = ioread32(mmio + offset);
 
@@ -561,13 +561,13 @@ static void bpcie_ahci_rmw(void __iomem *mmio, u32 offset, u32 mask, u32 set)
 #define BAIKAL_REVISION_30100		0x30100
 #define BAIKAL_SATA_TRACE_DEFAULT	6
 
-struct bpcie_sata_rmw {
+struct baikal_sata_rmw {
 	u16 reg;
 	u32 keep;
 	u32 set;
 };
 
-static const struct bpcie_sata_rmw bpcie_sata_trace_0_2[] = {
+static const struct baikal_sata_rmw baikal_sata_trace_0_2[] = {
 	{ 0x204C, 0xFFFFC0FF, 0x1D00 },
 	{ 0x2054, 0xFFFF9FFF, 0x4000 },
 	{ 0x207C, 0xFFFFFFC0, 0x20 },
@@ -580,7 +580,7 @@ static const struct bpcie_sata_rmw bpcie_sata_trace_0_2[] = {
 	{ 0x2084, 0xFFFFFF00, 0x32 },
 };
 
-static const struct bpcie_sata_rmw bpcie_sata_trace_3_5[] = {
+static const struct baikal_sata_rmw baikal_sata_trace_3_5[] = {
 	{ 0x204C, 0xFFC0FFFF, 0x1E0000 },
 	{ 0x204C, 0xC0FFFFFF, 0 },
 	{ 0x2054, 0xFFFF9FFF, 0x2000 },
@@ -595,7 +595,7 @@ static const struct bpcie_sata_rmw bpcie_sata_trace_3_5[] = {
 	{ 0x2084, 0xFFFFFF00, 0x43 },
 };
 
-static const struct bpcie_sata_rmw bpcie_sata_trace_6_8[] = {
+static const struct baikal_sata_rmw baikal_sata_trace_6_8[] = {
 	{ 0x204C, 0xFFC0FFFF, 0x200000 },
 	{ 0x204C, 0xC0FFFFFF, 0x1000000 },
 	{ 0x2054, 0xFFFF9FFF, 0x2000 },
@@ -610,7 +610,7 @@ static const struct bpcie_sata_rmw bpcie_sata_trace_6_8[] = {
 	{ 0x2084, 0xFFFFFF00, 0x55 },
 };
 
-static const struct bpcie_sata_rmw bpcie_sata_trace_9_12[] = {
+static const struct baikal_sata_rmw baikal_sata_trace_9_12[] = {
 	{ 0x204C, 0xFFC0FFFF, 0x240000 },
 	{ 0x204C, 0xC0FFFFFF, 0x4000000 },
 	{ 0x2054, 0xFFFF9FFF, 0x2000 },
@@ -625,7 +625,7 @@ static const struct bpcie_sata_rmw bpcie_sata_trace_9_12[] = {
 	{ 0x2084, 0xFFFFFF00, 0x55 },
 };
 
-static const struct bpcie_sata_rmw bpcie_sata_trace_13_18[] = {
+static const struct baikal_sata_rmw baikal_sata_trace_13_18[] = {
 	{ 0x204C, 0xFFC0FFFF, 0x260000 },
 	{ 0x204C, 0xC0FFFFFF, 0x7000000 },
 	{ 0x2054, 0xFFFF9FFF, 0x2000 },
@@ -642,17 +642,17 @@ static const struct bpcie_sata_rmw bpcie_sata_trace_13_18[] = {
 
 static const struct {
 	u32 max_length;
-	const struct bpcie_sata_rmw *rmw;
+	const struct baikal_sata_rmw *rmw;
 	size_t count;
-} bpcie_sata_trace_sets[] = {
-	{ 2, bpcie_sata_trace_0_2, ARRAY_SIZE(bpcie_sata_trace_0_2) },
-	{ 5, bpcie_sata_trace_3_5, ARRAY_SIZE(bpcie_sata_trace_3_5) },
-	{ 8, bpcie_sata_trace_6_8, ARRAY_SIZE(bpcie_sata_trace_6_8) },
-	{ 12, bpcie_sata_trace_9_12, ARRAY_SIZE(bpcie_sata_trace_9_12) },
-	{ 18, bpcie_sata_trace_13_18, ARRAY_SIZE(bpcie_sata_trace_13_18) },
+} baikal_sata_trace_sets[] = {
+	{ 2, baikal_sata_trace_0_2, ARRAY_SIZE(baikal_sata_trace_0_2) },
+	{ 5, baikal_sata_trace_3_5, ARRAY_SIZE(baikal_sata_trace_3_5) },
+	{ 8, baikal_sata_trace_6_8, ARRAY_SIZE(baikal_sata_trace_6_8) },
+	{ 12, baikal_sata_trace_9_12, ARRAY_SIZE(baikal_sata_trace_9_12) },
+	{ 18, baikal_sata_trace_13_18, ARRAY_SIZE(baikal_sata_trace_13_18) },
 };
 
-static bool bpcie_baikal_boot_info(bool hdd, u8 *trace, u32 *revision)
+static bool baikal_baikal_boot_info(bool hdd, u8 *trace, u32 *revision)
 {
 	u8 *page = memremap(BAIKAL_BOOT_PAGE_PHYS, PAGE_SIZE, MEMREMAP_WB);
 
@@ -666,7 +666,7 @@ static bool bpcie_baikal_boot_info(bool hdd, u8 *trace, u32 *revision)
 	return true;
 }
 
-static u32 bpcie_sata_trace_length(u8 trace)
+static u32 baikal_sata_trace_length(u8 trace)
 {
 	u32 length = trace & 0x1f;
 
@@ -677,25 +677,25 @@ static u32 bpcie_sata_trace_length(u8 trace)
 	return length;
 }
 
-static void bpcie_sata_write_trace_set(void __iomem *mmio, u32 length)
+static void baikal_sata_write_trace_set(void __iomem *mmio, u32 length)
 {
 	size_t i, j;
 
-	for (i = 0; i < ARRAY_SIZE(bpcie_sata_trace_sets); i++) {
-		if (length > bpcie_sata_trace_sets[i].max_length)
+	for (i = 0; i < ARRAY_SIZE(baikal_sata_trace_sets); i++) {
+		if (length > baikal_sata_trace_sets[i].max_length)
 			continue;
-		for (j = 0; j < bpcie_sata_trace_sets[i].count; j++)
-			bpcie_ahci_rmw(mmio, bpcie_sata_trace_sets[i].rmw[j].reg,
-				       bpcie_sata_trace_sets[i].rmw[j].keep,
-				       bpcie_sata_trace_sets[i].rmw[j].set);
+		for (j = 0; j < baikal_sata_trace_sets[i].count; j++)
+			baikal_ahci_rmw(mmio, baikal_sata_trace_sets[i].rmw[j].reg,
+				       baikal_sata_trace_sets[i].rmw[j].keep,
+				       baikal_sata_trace_sets[i].rmw[j].set);
 		return;
 	}
 }
 
-int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
+int baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
 {
 	struct pci_dev *glue_dev;
-	struct bpcie_dev *sc;
+	struct ps4sb_dev *sc;
 	u32 efuse0, efuse1;
 	u32 tune0 = 40;
 	u32 tune1 = 16;
@@ -722,7 +722,7 @@ int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
 	if (!glue_dev)
 		return -EPROBE_DEFER;
 
-	if (!bpcie_is_compatible_device(glue_dev)) {
+	if (!baikal_is_compatible_device(glue_dev)) {
 		ret = -ENODEV;
 		goto out_put;
 	}
@@ -744,9 +744,9 @@ int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
 		hold_offset = 44;
 	}
 
-	glue_write32(sc, BPCIE_USB_BASE + pulse_offset, 1);
-	glue_write32(sc, BPCIE_USB_BASE + hold_offset, 1);
-	glue_write32(sc, BPCIE_USB_BASE + pulse_offset, 0);
+	glue_write32(sc, BAIKAL_USB_BASE + pulse_offset, 1);
+	glue_write32(sc, BAIKAL_USB_BASE + hold_offset, 1);
+	glue_write32(sc, BAIKAL_USB_BASE + pulse_offset, 0);
 
 	efuse0 = ioread32(sc->bar4 + 0xC000 + 72);
 	efuse1 = ioread32(sc->bar4 + 0xC000 + 108);
@@ -765,8 +765,8 @@ int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
 
 	dev_info(&pdev->dev, "Baikal SATA EFUSE VALUE: 0x%02x:0x%02x:0x%02x\n",
 		 tune0, tune1, tune2);
-	have_boot = bpcie_baikal_boot_info(shared_path, &trace, &revision);
-	length = bpcie_sata_trace_length(trace);
+	have_boot = baikal_baikal_boot_info(shared_path, &trace, &revision);
+	length = baikal_sata_trace_length(trace);
 	if (have_boot)
 		dev_info(&pdev->dev,
 			 "Baikal SATA PHY trace byte 0x%02x, length %u, revision 0x%x\n",
@@ -776,38 +776,38 @@ int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio)
 			 "Baikal SATA PHY boot block not mapped, length %u\n",
 			 length);
 
-	bpcie_ahci_rmw(ahci_mmio, 0x20A0, 0xFBFF03FF, (tune0 << 10) | 0x4000000);
+	baikal_ahci_rmw(ahci_mmio, 0x20A0, 0xFBFF03FF, (tune0 << 10) | 0x4000000);
 	iowrite32(ioread32(ahci_mmio + 0x2014) | 0x100000, ahci_mmio + 0x2014);
-	bpcie_ahci_rmw(ahci_mmio, 0x2054, 0xFFFFF07F, tune1 << 7);
+	baikal_ahci_rmw(ahci_mmio, 0x2054, 0xFFFFF07F, tune1 << 7);
 	iowrite32(ioread32(ahci_mmio + 0x201C) | 0x4, ahci_mmio + 0x201C);
-	bpcie_ahci_rmw(ahci_mmio, 0x2078, 0xFFFFFE0F, tune2 << 4);
+	baikal_ahci_rmw(ahci_mmio, 0x2078, 0xFFFFFE0F, tune2 << 4);
 
-	bpcie_sata_write_trace_set(ahci_mmio, length);
+	baikal_sata_write_trace_set(ahci_mmio, length);
 
-	bpcie_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFFFE0, 0x12);
-	bpcie_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFC0FF, 0x3100);
-	bpcie_ahci_rmw(ahci_mmio, 0x2040, 0xFFE0FFFF, 0xE0000);
-	bpcie_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFFF1F, 0x80);
+	baikal_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFFFE0, 0x12);
+	baikal_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFC0FF, 0x3100);
+	baikal_ahci_rmw(ahci_mmio, 0x2040, 0xFFE0FFFF, 0xE0000);
+	baikal_ahci_rmw(ahci_mmio, 0x2040, 0xFFFFFF1F, 0x80);
 	if (revision == BAIKAL_REVISION_30100) {
 		iowrite32(ioread32(ahci_mmio + 0x2028) & ~BIT(25),
 			  ahci_mmio + 0x2028);
-		bpcie_ahci_rmw(ahci_mmio, 0x2044, 0xFFFFFF80, 0x1C);
+		baikal_ahci_rmw(ahci_mmio, 0x2044, 0xFFFFFF80, 0x1C);
 	}
-	bpcie_ahci_rmw(ahci_mmio, 0x201C, 0xFF0FFFFF, 0x200000);
-	bpcie_ahci_rmw(ahci_mmio, 0x20DC, 0xFFFFE0FF, 0x400);
+	baikal_ahci_rmw(ahci_mmio, 0x201C, 0xFF0FFFFF, 0x200000);
+	baikal_ahci_rmw(ahci_mmio, 0x20DC, 0xFFFFE0FF, 0x400);
 	iowrite32(ioread32(ahci_mmio + 0x2024) | 0x30, ahci_mmio + 0x2024);
 
-	glue_write32(sc, BPCIE_USB_BASE + hold_offset, 0);
+	glue_write32(sc, BAIKAL_USB_BASE + hold_offset, 0);
 	readl_poll_timeout_atomic(ahci_mmio + 0xDC, status, status & 0x1,
 				  10, 1000);
 
-	bpcie_ahci_rmw(ahci_mmio, 0x0, 0xE7FFFFFF, 0);
+	baikal_ahci_rmw(ahci_mmio, 0x0, 0xE7FFFFFF, 0);
 	iowrite32(0x1, ahci_mmio + 0x0C);
-	bpcie_ahci_rmw(ahci_mmio, 0x0B8, 0xFFFDFFFF, 0);
-	bpcie_ahci_rmw(ahci_mmio, 0x118, 0xFFE3FFFF, 0x40000);
+	baikal_ahci_rmw(ahci_mmio, 0x0B8, 0xFFFDFFFF, 0);
+	baikal_ahci_rmw(ahci_mmio, 0x118, 0xFFE3FFFF, 0x40000);
 
 out_put:
 	pci_dev_put(glue_dev);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(bpcie_baikal_sata_phy_init);
+EXPORT_SYMBOL_GPL(baikal_sata_phy_init);

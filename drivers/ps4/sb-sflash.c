@@ -17,7 +17,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 
-#include "ps4-sflash.h"
+#include "sb-sflash.h"
 
 struct ps4_sflash_dev;
 
