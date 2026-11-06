@@ -4,9 +4,9 @@
 #include <linux/io.h>
 #include <linux/pci.h>
 #include <linux/i2c.h>
-#include "aeolia-baikal.h"
+#include "ps4sb.h"
 
-#define apcie_dev		abpcie_dev
+#define apcie_dev		ps4sb_dev
 
 enum aeolia_func_id {
 	AEOLIA_FUNC_ID_ACPI = 0,
@@ -111,17 +111,5 @@ static inline int apcie_irqnum(struct apcie_dev *sc, int index)
 	}
 }
 
-int apcie_icc_cmd(u8 major, u16 minor, const void *data, u16 length,
-	    void *reply, u16 reply_length);
-int apcie_uart_init(struct apcie_dev *sc);
-void apcie_uart_remove(struct apcie_dev *sc);
-int apcie_icc_init(struct apcie_dev *sc);
-void apcie_icc_remove(struct apcie_dev *sc);
-#ifdef CONFIG_PM
-void apcie_uart_suspend(struct apcie_dev *sc, pm_message_t state);
-void apcie_uart_resume(struct apcie_dev *sc);
-void apcie_icc_suspend(struct apcie_dev *sc, pm_message_t state);
-void apcie_icc_resume(struct apcie_dev *sc);
-#endif
 
 #endif

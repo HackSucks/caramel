@@ -557,19 +557,34 @@ static int apcie_glue_resume(struct apcie_dev *sc) {
 #endif
 
 
-int apcie_uart_init(struct apcie_dev *sc);
-int apcie_icc_init(struct apcie_dev *sc);
-void apcie_uart_remove(struct apcie_dev *sc);
-void apcie_icc_remove(struct apcie_dev *sc);
+int ps4sb_uart_init(struct apcie_dev *sc);
+int ps4sb_icc_init(struct apcie_dev *sc);
+void ps4sb_uart_remove(struct apcie_dev *sc);
+void ps4sb_icc_remove(struct apcie_dev *sc);
 #ifdef CONFIG_PM
-void apcie_uart_suspend(struct apcie_dev *sc, pm_message_t state);
-void apcie_icc_suspend(struct apcie_dev *sc, pm_message_t state);
-void apcie_uart_resume(struct apcie_dev *sc);
-void apcie_icc_resume(struct apcie_dev *sc);
+void ps4sb_uart_suspend(struct apcie_dev *sc, pm_message_t state);
+void ps4sb_icc_suspend(struct apcie_dev *sc, pm_message_t state);
+void ps4sb_uart_resume(struct apcie_dev *sc);
+void ps4sb_icc_resume(struct apcie_dev *sc);
 #endif
 
 /* From arch/x86/platform/ps4/ps4.c */
 extern bool apcie_initialized;
+
+static const struct ps4sb_family aeolia_family = {
+	.name		= "Aeolia",
+	.uart_bar	= 4,
+	.uart_base	= APCIE_RGN_UART_BASE,
+	.uart_clock	= 58500000,
+	.uart_subfunc	= APCIE_SUBFUNC_UART0,
+	.uart_count	= APCIE_NR_UARTS,
+	.icc_bar	= 4,
+	.icc_base	= APCIE_RGN_ICC_BASE,
+	.icc_claim_regs	= true,
+	.icc_boot_led	= true,
+	.i2c_data_off	= 0x14,
+	.i2c_err_off	= 0x0c,
+};
 
 static int apcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 	struct apcie_dev *sc;
@@ -591,6 +606,7 @@ static int apcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		goto disable_dev;
 	}
 	sc->pdev = dev;
+	sc->family = &aeolia_family;
 	memset(sc->irq_map, -1, sizeof(sc->irq_map));
 	memset(sc->serial_line, -1, sizeof(sc->serial_line));
 	pci_set_drvdata(dev, sc);
@@ -610,7 +626,7 @@ static int apcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 	if ((ret = apcie_glue_init(sc)) < 0)
 		goto free_bars;
-	if ((ret = apcie_icc_init(sc)) < 0)
+	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_glue;
 
 	WRITE_ONCE(apcie_initialized, true);
@@ -636,8 +652,8 @@ static void apcie_remove(struct pci_dev *dev) {
 	sc = pci_get_drvdata(dev);
 
 	WRITE_ONCE(apcie_initialized, false);
-	apcie_icc_remove(sc);
-	apcie_uart_remove(sc);
+	ps4sb_icc_remove(sc);
+	ps4sb_uart_remove(sc);
 	apcie_glue_remove(sc);
 
 	if (sc->bar0)
@@ -655,8 +671,8 @@ static int apcie_suspend(struct pci_dev *dev, pm_message_t state) {
 	struct apcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	apcie_icc_suspend(sc, state);
-	apcie_uart_suspend(sc, state);
+	ps4sb_icc_suspend(sc, state);
+	ps4sb_uart_suspend(sc, state);
 	apcie_glue_suspend(sc, state);
 	return 0;
 }
@@ -665,9 +681,9 @@ static int apcie_resume(struct pci_dev *dev) {
 	struct apcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	apcie_icc_resume(sc);
+	ps4sb_icc_resume(sc);
 	apcie_glue_resume(sc);
-	apcie_uart_resume(sc);
+	ps4sb_uart_resume(sc);
 	return 0;
 }
 #endif

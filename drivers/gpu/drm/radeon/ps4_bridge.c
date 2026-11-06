@@ -188,7 +188,7 @@ static int cq_exec(struct i2c_cmdqueue *q)
 	q->cmd->length = q->p - (u8 *)q->cmd;
 	q->req.length = q->p - (u8 *)&q->req;
 
-	res = apcie_icc_cmd(0x10, 0, &q->req, q->req.length,
+	res = ps4sb_icc_cmd(0x10, 0, &q->req, q->req.length,
 		      &q->reply, sizeof(q->reply));
 
 	if (res < 5) {
