@@ -31,6 +31,7 @@
 #include <asm/cpu_device_id.h>
 #include <asm/i8259.h>
 #include <asm/msr.h>
+#include <asm/ps4.h>
 #include <asm/topology.h>
 #include <asm/uv/uv.h>
 #include <asm/sev.h>
@@ -1553,7 +1554,8 @@ void __init tsc_init(void)
 		return;
 	}
 
-	if (tsc_clocksource_reliable || tsc_watchdog == TSC_WATCHDOG_OFF)
+	if (tsc_clocksource_reliable || tsc_watchdog == TSC_WATCHDOG_OFF ||
+	    ps4_is_baikal())
 		tsc_disable_clocksource_watchdog();
 
 	clocksource_register_khz(&clocksource_tsc_early, tsc_khz);
