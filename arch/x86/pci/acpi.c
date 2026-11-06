@@ -11,7 +11,7 @@
 #include <linux/pci-acpi.h>
 #include <asm/numa.h>
 #include <asm/pci_x86.h>
-#include <asm/processor.h>
+#include <asm/ps4.h>
 
 struct pci_root_info {
 	struct acpi_pci_root_info common;
@@ -204,8 +204,7 @@ void __init pci_acpi_crs_quirks(void)
 		pci_use_crs = false;
 
 #ifdef CONFIG_X86_PS4
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD &&
-	    boot_cpu_data.x86 == 0x16) {
+	if (ps4_is_baikal()) {
 		pci_use_crs = false;
 		pci_use_e820 = false;
 	}
