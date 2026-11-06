@@ -44,12 +44,14 @@ extern int ps4_samu_map(struct page **pages, unsigned int count, u64 *va);
 extern void ps4_samu_unmap(void);
 extern int ps4_samu_rng(void *buf, size_t len);
 extern int ps4_samu_ccp(void *op);
-extern int apcie_status(void);
+extern bool ps4sb_initialized;
+extern int ps4sb_status(void);
+extern int ps4sb_assign_irqs(struct pci_dev *dev, int nvec);
+extern void ps4sb_free_irqs(unsigned int virq, unsigned int nr_irqs);
 extern bool ps4_is_baikal(void);
 extern int bpcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
 extern void ps4sb_icc_reboot(void);
-extern int bpcie_status(void);
 extern int ps4sb_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
 extern int ps4sb_icc_register_event_handler(u8 major, ps4sb_icc_event_fn fn,
@@ -61,31 +63,20 @@ extern void ps4sb_icc_unregister_event_handler(u8 major);
 
 typedef void (*ps4sb_icc_event_fn)(void *ctx, u16 minor, const u8 *data,
 				   u16 length);
-static inline int apcie_assign_irqs(struct pci_dev *dev, int nvec)
+static inline int ps4sb_assign_irqs(struct pci_dev *dev, int nvec)
 {
 	return -ENODEV;
 }
-static inline void apcie_free_irqs(unsigned int virq, unsigned int nvec)
+static inline void ps4sb_free_irqs(unsigned int virq, unsigned int nr_irqs)
 {
 }
-static inline int apcie_status(void)
+static inline int ps4sb_status(void)
 {
 	return -ENODEV;
 }
 static inline bool ps4_is_baikal(void)
 {
 	return false;
-}
-static inline int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
-{
-	return -ENODEV;
-}
-static inline void bpcie_free_irqs(unsigned int virq, unsigned int nvec)
-{
-}
-static inline int bpcie_status(void)
-{
-	return -ENODEV;
 }
 static inline int ps4sb_icc_cmd(u8 major, u16 minor, const void *data,
 				u16 length, void *reply, u16 reply_length)

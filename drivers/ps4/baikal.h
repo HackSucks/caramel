@@ -160,14 +160,6 @@ static inline void pci_pm_stop_all(struct pci_dev *dev)
 int bpcie_is_compatible_device(struct pci_dev *dev);
 u32 glue_read32(struct bpcie_dev *sc, u32 offset);
 void glue_write32(struct bpcie_dev *sc, u32 offset, u32 value);
-#ifdef CONFIG_RTC_CLASS
-int bpcie_rtc_init(struct bpcie_dev *sc);
-#else
-static inline int bpcie_rtc_init(struct bpcie_dev *sc)
-{
-	return 0;
-}
-#endif
 int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio);
 
 #endif

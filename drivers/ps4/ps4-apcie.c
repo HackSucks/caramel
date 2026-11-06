@@ -569,7 +569,6 @@ void ps4sb_icc_resume(struct apcie_dev *sc);
 #endif
 
 /* From arch/x86/platform/ps4/ps4.c */
-extern bool apcie_initialized;
 
 static const struct ps4sb_family aeolia_family = {
 	.name		= "Aeolia",
@@ -584,6 +583,10 @@ static const struct ps4sb_family aeolia_family = {
 	.icc_boot_led	= true,
 	.i2c_data_off	= 0x14,
 	.i2c_err_off	= 0x0c,
+	.rtc_bar	= 2,
+	.rtc_reg	= 0x130,
+	.rtc_byte_regs	= true,
+	.rtc_epoch	= -1431543102LL,
 };
 
 static int apcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
@@ -626,10 +629,12 @@ static int apcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 	if ((ret = apcie_glue_init(sc)) < 0)
 		goto free_bars;
+	if (ps4sb_rtc_init(sc) < 0)
+		sc_err("rtc not registered\n");
 	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_glue;
 
-	WRITE_ONCE(apcie_initialized, true);
+	WRITE_ONCE(ps4sb_initialized, true);
 	return 0;
 
 remove_glue:
@@ -651,7 +656,7 @@ static void apcie_remove(struct pci_dev *dev) {
 	struct apcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	WRITE_ONCE(apcie_initialized, false);
+	WRITE_ONCE(ps4sb_initialized, false);
 	ps4sb_icc_remove(sc);
 	ps4sb_uart_remove(sc);
 	apcie_glue_remove(sc);

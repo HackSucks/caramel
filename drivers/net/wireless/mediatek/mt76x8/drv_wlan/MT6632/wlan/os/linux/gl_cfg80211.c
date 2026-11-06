@@ -85,7 +85,7 @@
 static bool mtk_wifi_is_ps4(void)
 {
 #ifdef CONFIG_X86_PS4
-	return apcie_status() >= 0;
+	return ps4sb_status() >= 0;
 #else
 	return false;
 #endif
