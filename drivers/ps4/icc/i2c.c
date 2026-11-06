@@ -99,12 +99,10 @@ static int icc_i2c_smbus_xfer(struct i2c_adapter *adapter, u16 addr,
 	}
 
 	msg.length = msg.cmd.length + 4;
-#ifdef CONFIG_X86_PS4_BAIKAL
 	if (bpcie_status() > 0) {
 		data_off = 8;
 		err_off = 0;
 	}
-#endif
 	ret = apcie_icc_cmd(0x10, 0x0, &msg, msg.length, resultbuf,
 		      sizeof(resultbuf));
 	if (ret < err_off + 2 || ret > sizeof(resultbuf)) {

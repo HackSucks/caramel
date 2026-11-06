@@ -292,11 +292,9 @@ int apcie_icc_cmd(u8 major, u16 minor, const void *data, u16 length,
 {
 	int ret;
 
-#ifdef CONFIG_X86_PS4_BAIKAL
 	if (!icc_sc && bpcie_status() > 0)
 		return bpcie_icc_cmd(major, minor, data, length, reply,
 				     reply_length);
-#endif
 	mutex_lock(&icc_mutex);
 	if (!icc_sc) {
 		pr_err("icc: not ready\n");

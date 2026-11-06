@@ -3211,7 +3211,7 @@ static bool quirks_force_identity_mapping(struct pci_dev *pdev)
 	return true;
 }
 
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 static bool amd_iommu_ps4_baikal_force_identity(struct device *dev)
 {
 	struct pci_dev *pdev;
@@ -3241,7 +3241,7 @@ static int amd_iommu_def_domain_type(struct device *dev)
 	if (to_pci_dev(dev)->untrusted)
 		return IOMMU_DOMAIN_DMA;
 
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 	if (amd_iommu_ps4_baikal_force_identity(dev) &&
 	    !cc_platform_has(CC_ATTR_MEM_ENCRYPT) &&
 	    !amd_iommu_snp_en)
@@ -4059,6 +4059,8 @@ static int irq_remapping_select(struct irq_domain *d, struct irq_fwspec *fwspec,
 		devid = get_ioapic_devid(fwspec->param[0]);
 	else if (x86_fwspec_is_hpet(fwspec))
 		devid = get_hpet_devid(fwspec->param[0]);
+	else if (x86_fwspec_is_aeolia(fwspec))
+		devid = fwspec->param[0];
 
 	if (devid < 0)
 		return 0;
