@@ -481,15 +481,11 @@ static void do_icc_init(void) {
 	u8 svc = 0x10;
 	u8 reply[0x30];
 	static const u8 led_config[] = {
-		3, 1, 0, 0,
+		2, 1, 0, 0,
 			0x10, 1,
-				2, 0xff, 2, 1, 0x00,
-			0x11, 1,
 				2, 0x00, 2, 1, 0x00,
-			0x02, 3,
-				1, 0x00, 4, 1, 0xbf,
-				2, 0xff, 5, 1, 0xff,
-				2, 0x00, 5, 1, 0xff,
+			0x11, 1,
+				2, 0xff, 2, 1, 0x00,
 	};
 	int ret;
 	ret = bpcie_icc_cmd(2, 6, NULL, 0, reply, 0x30);
