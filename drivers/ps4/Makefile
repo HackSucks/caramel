@@ -16,5 +16,7 @@ endif
 obj-y += ps4-led.o
 obj-y += ps4-fan.o
 obj-y += ps4-buzzer.o
+obj-$(CONFIG_RTC_CLASS) += ps4-rtc.o
+obj-y += ps4-sflash.o
 obj-$(CONFIG_PS4_TRNG) += ps4-trng.o
 obj-$(CONFIG_PS4_CCP) += ps4-ccp.o
