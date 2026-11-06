@@ -49,6 +49,7 @@
 #include "uvd_v4_2.h"
 #include "uvd_v5_0.h"
 #include "vce_v2_0.h"
+#include "vce_liverpool.h"
 #include "cik_dpm.h"
 
 #include "uvd/uvd_4_2_d.h"
@@ -93,6 +94,21 @@ static const struct amdgpu_video_codecs cik_video_codecs_encode =
 	.codec_array = cik_video_codecs_encode_array,
 };
 
+static const struct amdgpu_video_codec_info liverpool_video_codecs_encode_array[] = {
+	{
+		.codec_type = AMDGPU_INFO_VIDEO_CAPS_CODEC_IDX_MPEG4_AVC,
+		.max_width = 1920,
+		.max_height = 1088,
+		.max_pixels_per_frame = 1920 * 1088,
+		.max_level = 42,
+	},
+};
+
+static const struct amdgpu_video_codecs liverpool_video_codecs_encode = {
+	.codec_count = ARRAY_SIZE(liverpool_video_codecs_encode_array),
+	.codec_array = liverpool_video_codecs_encode_array,
+};
+
 static const struct amdgpu_video_codec_info cik_video_codecs_decode_array[] =
 {
 	{
@@ -134,6 +150,10 @@ static const struct amdgpu_video_codecs cik_video_codecs_decode =
 static int cik_query_video_codecs(struct amdgpu_device *adev, bool encode,
 				  const struct amdgpu_video_codecs **codecs)
 {
+	if (encode && amdgpu_vce_is_native(adev)) {
+		*codecs = &liverpool_video_codecs_encode;
+		return 0;
+	}
 	switch (adev->asic_type) {
 	case CHIP_BONAIRE:
 	case CHIP_HAWAII:
@@ -2744,7 +2764,8 @@ int cik_set_ip_blocks(struct amdgpu_device *adev)
 		amdgpu_device_ip_block_add(adev, &cik_sdma_ip_block);
 		if (adev->pdev->device == 0x9923)
 			amdgpu_device_ip_block_add(adev, &uvd_v5_0_ip_block);
-		/*amdgpu_device_ip_block_add(adev, &vce_v2_0_ip_block)*/;
+		if (adev->pdev->device == 0x9923)
+			amdgpu_device_ip_block_add(adev, &vce_liverpool_ip_block);
 		break;
 	case CHIP_GLADIUS:
 		amdgpu_device_ip_block_add(adev, &cik_common_ip_block);
