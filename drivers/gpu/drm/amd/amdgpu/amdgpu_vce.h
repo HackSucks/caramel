@@ -53,8 +53,14 @@ struct amdgpu_vce {
 	unsigned		num_rings;
 	uint32_t		keyselect;
 	struct drm_mm_node	gart_node;
+	bool			native_stop_failed;
+	bool			native_running;
+	struct mutex		native_mutex;
+	struct workqueue_struct *native_workqueue;
+	struct vce_liverpool_session *native_sessions[AMDGPU_MAX_VCE_HANDLES];
 };
 
+bool amdgpu_vce_is_native(struct amdgpu_device *adev);
 int amdgpu_vce_early_init(struct amdgpu_device *adev);
 int amdgpu_vce_sw_init(struct amdgpu_device *adev, unsigned long size);
 int amdgpu_vce_sw_fini(struct amdgpu_device *adev);
@@ -64,6 +70,8 @@ int amdgpu_vce_resume(struct amdgpu_device *adev);
 void amdgpu_vce_free_handles(struct amdgpu_device *adev, struct drm_file *filp);
 int amdgpu_vce_ring_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 			     struct amdgpu_ib *ib);
+int amdgpu_vce_ring_parse_cs_legacy(struct amdgpu_cs_parser *p,
+		struct amdgpu_job *job, struct amdgpu_ib *ib);
 int amdgpu_vce_ring_parse_cs_vm(struct amdgpu_cs_parser *p,
 				struct amdgpu_job *job,
 				struct amdgpu_ib *ib);
