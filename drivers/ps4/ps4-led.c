@@ -5,7 +5,7 @@
 #include <linux/platform_device.h>
 #include <linux/string.h>
 #include <asm/ps4.h>
-#include "aeolia.h"
+#include "ps4sb.h"
 #include "ps4-led.h"
 
 static const u8 led_off[] = {
