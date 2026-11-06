@@ -4,6 +4,7 @@
 #include <linux/leds.h>
 #include <linux/platform_device.h>
 #include <linux/string.h>
+#include <asm/ps4.h>
 #include "aeolia.h"
 #include "ps4-led.h"
 
@@ -260,6 +261,7 @@ static struct ps4_led_node ps4_led_nodes[] = {
 
 static int ps4_led_probe(struct platform_device *pdev)
 {
+	const u8 *boot_payload;
 	u8 reply[0x30];
 	int i, ret;
 
@@ -274,18 +276,21 @@ static int ps4_led_probe(struct platform_device *pdev)
 		}
 	}
 
+	boot_payload = bpcie_status() > 0 ? led_violet_blue : led_purple;
+
 	memset(reply, 0, sizeof(reply));
 	ret = apcie_icc_cmd(PS4_LED_ICC_MAJOR, PS4_LED_ICC_MINOR,
-			    led_purple, PS4_LED_PAYLOAD_LEN,
+			    boot_payload, PS4_LED_PAYLOAD_LEN,
 			    reply, sizeof(reply));
 	if (ret < 0 || reply[0] != 0 || reply[1] != 0)
 		dev_warn(&pdev->dev, "boot LED set failed: ret=%d reply=[%02x %02x]\n",
 			 ret, reply[0], reply[1]);
 	else
-		ps4_led_current_payload = led_purple;
+		ps4_led_current_payload = boot_payload;
 
-	dev_info(&pdev->dev, "PS4 LED driver ready: %zu colors, boot color: purple\n",
-		 ARRAY_SIZE(ps4_led_nodes));
+	dev_info(&pdev->dev, "PS4 LED driver ready: %zu colors, boot color: %s\n",
+		 ARRAY_SIZE(ps4_led_nodes),
+		 boot_payload == led_violet_blue ? "violet blue" : "purple");
 
 	return 0;
 }
