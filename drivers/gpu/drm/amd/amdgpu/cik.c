@@ -2772,9 +2772,9 @@ int cik_set_ip_blocks(struct amdgpu_device *adev)
 			amdgpu_device_ip_block_add(adev, &dce_v8_1_ip_block);
 		amdgpu_device_ip_block_add(adev, &gfx_v7_1_ip_block);
 		amdgpu_device_ip_block_add(adev, &cik_sdma_ip_block);
-		if (adev->pdev->device == 0x9923)
+		if (amdgpu_vce_is_native(adev))
 			amdgpu_device_ip_block_add(adev, &uvd_v5_0_ip_block);
-		if (adev->pdev->device == 0x9923)
+		if (amdgpu_vce_is_native(adev))
 			amdgpu_device_ip_block_add(adev, &vce_liverpool_ip_block);
 		break;
 	case CHIP_GLADIUS:

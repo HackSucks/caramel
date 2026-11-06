@@ -98,7 +98,16 @@ static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
 
 bool amdgpu_vce_is_native(struct amdgpu_device *adev)
 {
-	return adev->asic_type == CHIP_LIVERPOOL && adev->pdev->device == 0x9923;
+#ifdef CONFIG_X86_PS4
+	u32 revision = cpuid_eax(1) & 0xfffffff0;
+
+	return adev->asic_type == CHIP_LIVERPOOL &&
+	       (adev->pdev->device == 0x9920 || adev->pdev->device == 0x9922 ||
+		adev->pdev->device == 0x9923) &&
+	       (revision & 0xffffff00) == 0x710f00 && revision > 0x710f2f;
+#else
+	return false;
+#endif
 }
 
 /**
