@@ -4,9 +4,9 @@
 #include <linux/io.h>
 #include <linux/pci.h>
 #include <linux/i2c.h>
-#include "aeolia-baikal.h"
+#include "ps4sb.h"
 
-#define bpcie_dev		abpcie_dev
+#define bpcie_dev		ps4sb_dev
 enum baikal_func_id {
 	BAIKAL_FUNC_ID_ACPI = 0,
 	BAIKAL_FUNC_ID_GBE,
@@ -97,8 +97,6 @@ static inline int bpcie_irqnum(struct bpcie_dev *sc, int index)
 	}
 }
 
-int bpcie_icc_cmd(u8 major, u16 minor, const void *data, u16 length,
-	    void *reply, u16 reply_length);
 
 #define CHAR_BIT 8
 static inline u32 rol (u32 n, unsigned int c) {
@@ -162,7 +160,6 @@ static inline void pci_pm_stop_all(struct pci_dev *dev)
 int bpcie_is_compatible_device(struct pci_dev *dev);
 u32 glue_read32(struct bpcie_dev *sc, u32 offset);
 void glue_write32(struct bpcie_dev *sc, u32 offset, u32 value);
-int bpcie_uart_init(struct bpcie_dev *sc);
 #ifdef CONFIG_RTC_CLASS
 int bpcie_rtc_init(struct bpcie_dev *sc);
 #else
@@ -171,15 +168,6 @@ static inline int bpcie_rtc_init(struct bpcie_dev *sc)
 	return 0;
 }
 #endif
-void bpcie_uart_remove(struct bpcie_dev *sc);
-int bpcie_icc_init(struct bpcie_dev *sc);
-void bpcie_icc_remove(struct bpcie_dev *sc);
 int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio);
-#ifdef CONFIG_PM
-void bpcie_uart_suspend(struct bpcie_dev *sc, pm_message_t state);
-void bpcie_uart_resume(struct bpcie_dev *sc);
-void bpcie_icc_suspend(struct bpcie_dev *sc, pm_message_t state);
-void bpcie_icc_resume(struct bpcie_dev *sc);
-#endif
 
 #endif

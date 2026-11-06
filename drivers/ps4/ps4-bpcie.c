@@ -403,18 +403,25 @@ static int bpcie_glue_resume(struct bpcie_dev *sc) {
 }
 #endif
 
-int bpcie_uart_init(struct bpcie_dev *sc);
-int bpcie_icc_init(struct bpcie_dev *sc);
-void bpcie_uart_remove(struct bpcie_dev *sc);
-void bpcie_icc_remove(struct bpcie_dev *sc);
 #ifdef CONFIG_PM
-void bpcie_uart_suspend(struct bpcie_dev *sc, pm_message_t state);
-void bpcie_icc_suspend(struct bpcie_dev *sc, pm_message_t state);
-void bpcie_uart_resume(struct bpcie_dev *sc);
-void bpcie_icc_resume(struct bpcie_dev *sc);
 #endif
 
 extern bool bpcie_initialized;
+
+static const struct ps4sb_family baikal_family = {
+	.name			= "Baikal",
+	.uart_bar		= 2,
+	.uart_base		= BPCIE_RGN_UART_BASE,
+	.uart_clock		= 25000000,
+	.uart_subfunc		= BPCIE_SUBFUNC_UART0,
+	.uart_count		= BPCIE_NR_UARTS,
+	.icc_bar		= 2,
+	.icc_base		= BPCIE_RGN_ICC_BASE,
+	.icc_atomic_power	= true,
+	.icc_usb_power		= true,
+	.i2c_data_off		= 8,
+	.i2c_err_off		= 0,
+};
 
 static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 	struct bpcie_dev *sc;
@@ -436,6 +443,7 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		goto disable_dev;
 	}
 	sc->pdev = dev;
+	sc->family = &baikal_family;
 	memset(sc->irq_map, -1, sizeof(sc->irq_map));
 	pci_set_drvdata(dev, sc);
 
@@ -451,18 +459,18 @@ static int bpcie_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 	if ((ret = bpcie_glue_init(sc)) < 0)
 		goto free_bars;
-	if (bpcie_uart_init(sc) < 0)
+	if (ps4sb_uart_init(sc) < 0)
 		sc_err("uart not registered\n");
 	if (bpcie_rtc_init(sc) < 0)
 		sc_err("rtc not registered\n");
-	if ((ret = bpcie_icc_init(sc)) < 0)
+	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_uart;
 
 	WRITE_ONCE(bpcie_initialized, true);
 	return 0;
 
 remove_uart:
-	bpcie_uart_remove(sc);
+	ps4sb_uart_remove(sc);
 	bpcie_glue_remove(sc);
 free_bars:
 	if (sc->bar0)
@@ -482,8 +490,8 @@ static void bpcie_remove(struct pci_dev *dev) {
 	sc = pci_get_drvdata(dev);
 
 	WRITE_ONCE(bpcie_initialized, false);
-	bpcie_icc_remove(sc);
-	bpcie_uart_remove(sc);
+	ps4sb_icc_remove(sc);
+	ps4sb_uart_remove(sc);
 	bpcie_glue_remove(sc);
 
 	if (sc->bar0)
@@ -501,8 +509,8 @@ static int bpcie_suspend(struct pci_dev *dev, pm_message_t state) {
 	struct bpcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	bpcie_icc_suspend(sc, state);
-	bpcie_uart_suspend(sc, state);
+	ps4sb_icc_suspend(sc, state);
+	ps4sb_uart_suspend(sc, state);
 	bpcie_glue_suspend(sc, state);
 	return 0;
 }
@@ -511,9 +519,9 @@ static int bpcie_resume(struct pci_dev *dev) {
 	struct bpcie_dev *sc;
 	sc = pci_get_drvdata(dev);
 
-	bpcie_icc_resume(sc);
+	ps4sb_icc_resume(sc);
 	bpcie_glue_resume(sc);
-	bpcie_uart_resume(sc);
+	ps4sb_uart_resume(sc);
 	return 0;
 }
 #endif

@@ -73,12 +73,9 @@ bool ps4_is_baikal(void)
 }
 EXPORT_SYMBOL_GPL(ps4_is_baikal);
 
-void icc_reboot(void);
-
 static void ps4_emergency_restart(void)
 {
-	icc_reboot();
-	bpcie_icc_reboot();
+	ps4sb_icc_reboot();
 }
 
 /*
