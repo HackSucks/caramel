@@ -28,6 +28,7 @@
 #include <drm/amdgpu_drm.h>
 #include <drm/display/drm_dp_helper.h>
 
+#include <asm/ps4.h>
 #include "amdgpu.h"
 
 #include "atom.h"
@@ -507,6 +508,7 @@ struct amdgpu_atombios_dp_link_train_info {
 	int dp_clock;
 	int dp_lane_count;
 	bool tp3_supported;
+	bool skip_status_check;
 	u8 dpcd[DP_RECEIVER_CAP_SIZE];
 	u8 train_set[4];
 	u8 link_status[DP_LINK_STATUS_SIZE];
@@ -623,6 +625,9 @@ amdgpu_atombios_dp_link_train_cr(struct amdgpu_atombios_dp_link_train_info *dp_i
 
 	udelay(400);
 
+	if (dp_info->skip_status_check)
+		return 0;
+
 	/* clock recovery loop */
 	clock_recovery = false;
 	dp_info->tries = 0;
@@ -688,6 +693,9 @@ amdgpu_atombios_dp_link_train_ce(struct amdgpu_atombios_dp_link_train_info *dp_i
 		amdgpu_atombios_dp_set_tp(dp_info, DP_TRAINING_PATTERN_3);
 	else
 		amdgpu_atombios_dp_set_tp(dp_info, DP_TRAINING_PATTERN_2);
+
+	if (dp_info->skip_status_check)
+		return 0;
 
 	/* channel equalization loop */
 	dp_info->tries = 0;
@@ -772,6 +780,9 @@ void amdgpu_atombios_dp_link_train(struct drm_encoder *encoder,
 	dp_info.dp_lane_count = dig_connector->dp_lane_count;
 	dp_info.dp_clock = dig_connector->dp_clock;
 	dp_info.aux = &amdgpu_connector->ddc_bus->aux;
+	dp_info.skip_status_check = adev->asic_type == CHIP_LIVERPOOL &&
+				    adev->pdev->device != 0x9920 &&
+				    !ps4_is_baikal();
 
 	if (amdgpu_atombios_dp_link_train_init(&dp_info))
 		goto done;
