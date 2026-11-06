@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-2.0-only
+#ifndef _PS4_SFLASH_H
+#define _PS4_SFLASH_H
+
+#include <linux/types.h>
+#include <linux/ioctl.h>
+
+#define PS4_SFLASH_TOTAL_SIZE       (32 * 1024 * 1024)
+#define PS4_SFLASH_CHUNK_FLASH      16384
+#define PS4_SFLASH_CHUNK_DMA        (PS4_SFLASH_CHUNK_FLASH * 4)
+
+#define PS4_SFLASH_REG_OFFSET       0x00000
+#define PS4_SFLASH_REG_DATA         0x00004
+#define PS4_SFLASH_REG_CMD          0x00008
+#define PS4_SFLASH_REG_MODE         0x0000c
+#define PS4_SFLASH_REG_RDID         0x00020
+#define PS4_SFLASH_REG_OPCODES      0x00028
+#define PS4_SFLASH_REG_CMD_FLAGS    0x0002c
+#define PS4_SFLASH_REG_CS           0x00030
+#define PS4_SFLASH_REG_TIMING       0x00038
+#define PS4_SFLASH_REG_STATUS_CLR   0x0003c
+#define PS4_SFLASH_REG_STATUS       0x00040
+#define PS4_SFLASH_REG_DMA_ADDR     0x00044
+#define PS4_SFLASH_REG_DMA_LEN      0x00048
+
+#define PS4_SFLASH_REG_CLK_STATUS   0x01000
+#define PS4_SFLASH_REG_CLK_CTRL     0x01004
+
+#define PS4_SFLASH_IOC_MAGIC        'S'
+#define PS4_SFLASH_IOC_GET_SIZE     _IOR(PS4_SFLASH_IOC_MAGIC, 1, __u32)
+#define PS4_SFLASH_IOC_GET_JEDEC    _IOR(PS4_SFLASH_IOC_MAGIC, 2, __u32)
+#define PS4_SFLASH_IOC_GET_STATUS   _IOR(PS4_SFLASH_IOC_MAGIC, 3, __u32)
+
+#endif
