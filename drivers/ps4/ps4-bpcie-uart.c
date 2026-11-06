@@ -5,6 +5,7 @@
 #include "baikal.h"
 void bpcie_uart_remove(struct bpcie_dev *sc);
 
+#ifdef CONFIG_SERIAL_8250
 int bpcie_uart_init(struct bpcie_dev *sc)
 {
 	int i;
@@ -63,4 +64,25 @@ void bpcie_uart_resume(struct bpcie_dev *sc)
 		if (sc->serial_line[i] >= 0)
 			serial8250_resume_port(sc->serial_line[i]);
 }
+#endif
+
+#else
+int bpcie_uart_init(struct bpcie_dev *sc)
+{
+	return 0;
+}
+
+void bpcie_uart_remove(struct bpcie_dev *sc)
+{
+}
+
+#ifdef CONFIG_PM
+void bpcie_uart_suspend(struct bpcie_dev *sc, pm_message_t state)
+{
+}
+
+void bpcie_uart_resume(struct bpcie_dev *sc)
+{
+}
+#endif
 #endif
