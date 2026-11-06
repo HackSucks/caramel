@@ -20,6 +20,9 @@
 
 #define EMC_TIMER_BASE 0xd0281000
 #define EMC_TIMER_VALUE 0x28
+#define EMC_TIMER_HZ 32768
+#define EMC_TIMER_BAIKAL_OFFSET 0x9000
+#define EMC_TIMER_BAIKAL_VALUE 0x18
 
 extern unsigned long ps4_calibrate_tsc(void);
 
