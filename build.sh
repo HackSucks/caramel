@@ -1,47 +1,39 @@
 #!/usr/bin/env bash
 
-# PS4-Linux Strawberry Builder
-# Supports two PS4-focused build profiles, two LTO flavors, and an optional Baikal southbridge target:
-#   server  — headless/services, HZ=250, PREEMPT_VOLUNTARY, performance governor
-#   general — desktop/gaming, HZ=250, PREEMPT=y, schedutil/reflex
-#   ThinLTO / FullLTO selectable via lto=ThinLTO or lto=FullLTO
-#   southbridge=AeoliaBelize or southbridge=Baikal
-#
-# Usage:
-#   ./build.sh
-#   ./build.sh --option N
-#   ./build.sh --option N use=Server
-#   ./build.sh --option N lto=ThinLTO
-#   ./build.sh --option N southbridge=Baikal
-#   ./build.sh --option N use=General lto=FullLTO southbridge=Baikal
-#   ./build.sh --option 7             Show/switch build profile
-#   ./build.sh --option 8             Show/switch LTO flavor
-#   ./build.sh --option 9             Show/switch southbridge target
-
 set -euo pipefail
 
 OUTPUT_DIR="${PWD}/out"
 FIRMWARE_DIR="${PWD}/extra_firmware"
 FIRMWARE_URL_BASE="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main"
 REQUIRED_PS4_SD8797_FW="mrvl/sd8797_uapsta.bin"
+REQUIRED_PS4_AMDGPU_FW=(
+    "amdgpu/liverpool_ce.bin"
+    "amdgpu/liverpool_me.bin"
+    "amdgpu/liverpool_mec.bin"
+    "amdgpu/liverpool_mec2.bin"
+    "amdgpu/liverpool_pfp.bin"
+    "amdgpu/liverpool_rlc.bin"
+    "amdgpu/liverpool_sdma.bin"
+    "amdgpu/liverpool_sdma1.bin"
+    "amdgpu/liverpool_refresh_uvd.bin"
+    "amdgpu/liverpool_vce.bin"
+)
 declare -A FIRMWARE_URL_OVERRIDES
-FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="useCustomFirmware" # Prevent download from upstream; use Orbis/Custom one
-#FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="f87c5b8dd547bcb434d5296ead3748241810c1d8" #sucks too
-#FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="f87c5b8dd547bcb434d5296ead3748241810c1d8" #sucks too
-# We need an older firmware version from ~2013-2016 for Aeolias' 8797 SDIO Chip, ideally the one that's used on the PS4 OS.
-# This version is the closest to that we have (besides the one packed in Orbis Torus (WiFi+BT) firmware).
+FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="useCustomFirmware"
+for blob in "${REQUIRED_PS4_AMDGPU_FW[@]}"; do
+    FIRMWARE_URL_OVERRIDES["${blob}"]="useCustomFirmware"
+done
 
-# PS4 Jaguar tuning
 export KCFLAGS="-march=btver2 -mtune=btver2 -Os"
-export KAFLAGS="-march=btver2 -mtune=btver2 -Os"
+export KAFLAGS="-march=btver2 -mtune=btver2"
 
 export HOSTCFLAGS="-Wno-error=incompatible-pointer-types-discards-qualifiers"
 
-PROFILE="server"
+PROFILE="general"
 LTO_FLAVOR="thin"
-SOUTHBRIDGE="aeoliabelize"
 JOBS="$(nproc)"
 MAX_JOBS="$(nproc)"
+BUILD_TYPE="release"
 
 lto_label() {
     if [[ "$LTO_FLAVOR" == "full" ]]; then
@@ -53,18 +45,27 @@ lto_label() {
     fi
 }
 
-southbridge_display() {
-    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
-        echo "Baikal"
-    else
-        echo "Aeolia/Belize"
-    fi
+apply_config_file() {
+    local file="$1"
+    local action name value
+    while read -r action name value; do
+        [[ -z "$action" || "$action" == \#* ]] && continue
+        case "$action" in
+            enable)  scripts/config --enable  "$name" ;;
+            disable) scripts/config --disable "$name" ;;
+            set-val) scripts/config --set-val "$name" "$value" ;;
+            set-str) scripts/config --set-str "$name" "$value" ;;
+        esac
+    done < "$file"
 }
 
-southbridge_suffix() {
-    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
-        echo "-Baikal"
-    fi
+profile_label() {
+    case "$PROFILE" in
+        general) echo "General" ;;
+        slopmax) echo "SlopMax" ;;
+        slopium) echo "Slopium" ;;
+        *)       echo "Server" ;;
+    esac
 }
 
 ensure_extra_firmware_blob() {
@@ -122,50 +123,52 @@ validate_extra_firmware_blob() {
     fi
 }
 
-# Parse optional selectors in any position:
-#   use=Server/use=General
-#   lto=ThinLTO/lto=FullLTO
-#   southbridge=AeoliaBelize/southbridge=Baikal
-#   baikal=on/baikal=off
+print_disclaimer() {
+    echo -e "\e[1;33mIf you want to contribute to this kernel: fork it and open a merge request.\e[0m"
+    echo -e "\e[1;33mDo not base a kernel off this one, dump it as a .patch repo, and call it your own work. This includes it being completely closed source, with only binary releases, which violates GPLv2.\e[0m"
+}
+
+print_usage() {
+    echo "Usage: ./build.sh --option N [use=Profile] [lto=LTOFlavor] [jobs=N]"
+    echo "  N: 1=build  2=fetch firmware  3=both"
+    echo ""
+    echo "  use=General/use=Server/use=SlopMax/use=Slopium  (default: General)"
+    echo "  lto=NoLTO/lto=ThinLTO/lto=FullLTO                (default: ThinLTO)"
+    echo "  mode=Release/mode=Debug                          (default: Release)"
+    echo "  jobs=N                                           (default: nproc)"
+    echo ""
+    echo "Examples:"
+    echo "  ./build.sh --option N use=Server"
+    echo "  ./build.sh --option N lto=ThinLTO"
+    echo "  ./build.sh --option N use=General lto=FullLTO jobs=8"
+    echo "  ./build.sh --option N use=General mode=Debug"
+    echo "  ./build.sh --option N use=General debug"
+    echo "  ./build.sh --option N use=SlopMax"
+    echo "  ./build.sh --option N use=Slopium"
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            print_usage
+            echo ""
+            print_disclaimer
+            exit 0
+            ;;
+    esac
+done
+
 for arg in "$@"; do
     case "$arg" in
         use=*)
             PROFILE_ARG="${arg#use=}"
             case "${PROFILE_ARG,,}" in
-                server) PROFILE="server" ;;
                 general) PROFILE="general" ;;
+                server) PROFILE="server" ;;
+                slopmax) PROFILE="slopmax" ;;
+                slopium) PROFILE="slopium" ;;
                 *)
-                    echo "Unknown build profile: ${PROFILE_ARG}. Valid: Server, General"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        southbridge=*|platform=*)
-            SOUTHBRIDGE_ARG="${arg#*=}"
-            case "${SOUTHBRIDGE_ARG,,}" in
-                aeolia|belize|aeoliabelize|aeolia/belize|base|default|legacy|nonbaikal)
-                    SOUTHBRIDGE="aeoliabelize"
-                    ;;
-                baikal)
-                    SOUTHBRIDGE="baikal"
-                    ;;
-                *)
-                    echo "Unknown southbridge target: ${SOUTHBRIDGE_ARG}. Valid: AeoliaBelize, Baikal"
-                    exit 1
-                    ;;
-            esac
-            ;;
-        baikal=*)
-            BAIKAL_ARG="${arg#baikal=}"
-            case "${BAIKAL_ARG,,}" in
-                1|true|yes|y|on|enable|enabled)
-                    SOUTHBRIDGE="baikal"
-                    ;;
-                0|false|no|n|off|disable|disabled)
-                    SOUTHBRIDGE="aeoliabelize"
-                    ;;
-                *)
-                    echo "Unknown Baikal toggle: ${BAIKAL_ARG}. Valid: on/off"
+                    echo "Unknown build profile: ${PROFILE_ARG}. Valid: General, Server, SlopMax, Slopium"
                     exit 1
                     ;;
             esac
@@ -175,151 +178,57 @@ for arg in "$@"; do
             case "${LTO_ARG,,}" in
                 thinlto|thin) LTO_FLAVOR="thin" ;;
                 fulllto|full) LTO_FLAVOR="full" ;;
-                none|no|off|disabled) LTO_FLAVOR="none" ;;
+                nolto|none|no|off|disabled) LTO_FLAVOR="none" ;;
                 *)
-                    echo "Unknown LTO flavor: ${LTO_ARG}. Valid: ThinLTO, FullLTO, none"
+                    echo "Unknown LTO flavor: ${LTO_ARG}. Valid: NoLTO, ThinLTO, FullLTO"
                     exit 1
                     ;;
             esac
             ;;
+        jobs=*)
+            JOBS_ARG="${arg#jobs=}"
+            if [[ "$JOBS_ARG" =~ ^[0-9]+$ ]] && [[ "$JOBS_ARG" -ge 1 ]] && [[ "$JOBS_ARG" -le "$MAX_JOBS" ]]; then
+                JOBS="$JOBS_ARG"
+            else
+                echo "Invalid jobs value: ${JOBS_ARG}. Must be 1-${MAX_JOBS}."
+                exit 1
+            fi
+            ;;
+        mode=*)
+            MODE_ARG="${arg#mode=}"
+            case "${MODE_ARG,,}" in
+                debug)   BUILD_TYPE="debug" ;;
+                release) BUILD_TYPE="release" ;;
+                *)
+                    echo "Unknown mode: ${MODE_ARG}. Valid: Release, Debug"
+                    exit 1
+                    ;;
+            esac
+            ;;
+        debug)
+            BUILD_TYPE="debug"
+            ;;
+        release)
+            BUILD_TYPE="release"
+            ;;
     esac
 done
 
-if [[ $# -ge 2 && "$1" == "--option" ]]; then
-    CHOICE="$2"
-    case "$CHOICE" in
-        1) DO_BUILD=1; DO_FETCH=0 ;;
-        2) DO_BUILD=0; DO_FETCH=1 ;;
-        3) DO_BUILD=1; DO_FETCH=1 ;;
-        4|5|6)
-            echo "--option $CHOICE is not supported in non-interactive mode."
-            exit 1
-            ;;
-        7)
-            echo "Current build profile: ${PROFILE}"
-            read -r -p "Switch profile? (y/n): " SWITCH
-            if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                [[ "$PROFILE" == "server" ]] && PROFILE="general" || PROFILE="server"
-                echo "Profile switched to: ${PROFILE}"
-            fi
-            exit 0
-            ;;
-        8)
-            echo "Current LTO flavor: $(lto_label)"
-            read -r -p "Switch LTO flavor? (y/n): " SWITCH
-            if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                [[ "$LTO_FLAVOR" == "thin" ]] && LTO_FLAVOR="full" || LTO_FLAVOR="thin"
-                echo "LTO flavor switched to: $(lto_label)"
-            fi
-            exit 0
-            ;;
-        9)
-            echo "Current southbridge target: $(southbridge_display)"
-            read -r -p "Switch southbridge target? (y/n): " SWITCH
-            if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                [[ "$SOUTHBRIDGE" == "aeoliabelize" ]] && SOUTHBRIDGE="baikal" || SOUTHBRIDGE="aeoliabelize"
-                echo "Southbridge target switched to: $(southbridge_display)"
-            fi
-            exit 0
-            ;;
-        *)
-            echo "Invalid --option argument: $CHOICE"
-            exit 1
-            ;;
-    esac
-    SKIP_MENU=1
-else
-    SKIP_MENU=0
+if [[ $# -lt 2 || "$1" != "--option" ]]; then
+    print_usage
+    exit 1
 fi
 
-if [[ "$SKIP_MENU" == "0" ]]; then
-    while true; do
-        clear
-        echo -e "\e[1;35m╔══════════════════════════════════════════════════╗\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;37mPS4-Linux Strawberry Builder\e[0m                     \e[1;35m║\e[0m"
-        echo -e "\e[1;35m╠══════════════════════════════════════════════════╣\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m1)\e[0m Build bzImage                                 \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m2)\e[0m Fetch firmware blobs                          \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m3)\e[0m Both (fetch + build)                          \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m4)\e[0m Threads to use: \e[1;33m$(printf "%-29s" "${JOBS} / ${MAX_JOBS}")\e[0m \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;31m5)\e[0m Quit                                          \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m6)\e[0m Build profile: \e[1;33m${PROFILE}\e[0m$(printf "%-22s" "")\e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;36m7)\e[0m Show/switch build profile                      \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m8)\e[0m Build LTO: \e[1;33m$(printf "%-31s" "$(lto_label)")\e[0m \e[1;35m║\e[0m"
-        echo -e "\e[1;35m║\e[0m \e[1;32m9)\e[0m Southbridge: \e[1;33m$(printf "%-25s" "$(southbridge_display)")\e[0m \e[1;35m║\e[0m"
-        echo -e "\e[1;35m╚══════════════════════════════════════════════════╝\e[0m"
-        echo ""
-        read -r -p "Select option [1-9]: " CHOICE
-
-        case "$CHOICE" in
-            1) DO_BUILD=1; DO_FETCH=0; break ;;
-            2) DO_BUILD=0; DO_FETCH=1; break ;;
-            3) DO_BUILD=1; DO_FETCH=1; break ;;
-            4)
-                read -r -p "Enter number of threads (1-${MAX_JOBS}): " NEW_JOBS
-                if [[ "$NEW_JOBS" =~ ^[0-9]+$ ]] && [[ "$NEW_JOBS" -ge 1 ]] && [[ "$NEW_JOBS" -le "$MAX_JOBS" ]]; then
-                    JOBS="$NEW_JOBS"
-                else
-                    echo -e "\e[1;31m[!] Invalid input.\e[0m Press enter to continue."
-                    read -r
-                fi
-                ;;
-            5)
-                echo "Exiting."
-                exit 0
-                ;;
-            6)
-                echo ""
-                echo "Select build profile:"
-                echo "  1) Server  (max throughput, headless)"
-                echo "  2) General (gaming/desktop latency)"
-                read -r -p "Profile [1-2]: " PROFILE_CHOICE
-                if [[ "$PROFILE_CHOICE" == "1" ]]; then
-                    PROFILE="server"
-                elif [[ "$PROFILE_CHOICE" == "2" ]]; then
-                    PROFILE="general"
-                else
-                    echo -e "\e[1;31m[!] Invalid input.\e[0m Press enter to continue."
-                    read -r
-                fi
-                ;;
-            7)
-                echo ""
-                echo "Current build profile: ${PROFILE}"
-                read -r -p "Switch profile? (y/n): " SWITCH
-                if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                    [[ "$PROFILE" == "server" ]] && PROFILE="general" || PROFILE="server"
-                    echo "Profile switched to: ${PROFILE}"
-                    sleep 1
-                fi
-                ;;
-            8)
-                echo ""
-                echo "Current LTO flavor: $(lto_label)"
-                read -r -p "Switch LTO flavor? (y/n): " SWITCH
-                if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                    [[ "$LTO_FLAVOR" == "thin" ]] && LTO_FLAVOR="full" || LTO_FLAVOR="thin"
-                    echo "LTO flavor switched to: $(lto_label)"
-                    sleep 1
-                fi
-                ;;
-            9)
-                echo ""
-                echo "Current southbridge target: $(southbridge_display)"
-                read -r -p "Switch southbridge target? (y/n): " SWITCH
-                if [[ "$SWITCH" =~ ^[Yy]$ ]]; then
-                    [[ "$SOUTHBRIDGE" == "aeoliabelize" ]] && SOUTHBRIDGE="baikal" || SOUTHBRIDGE="aeoliabelize"
-                    echo "Southbridge target switched to: $(southbridge_display)"
-                    sleep 1
-                fi
-                ;;
-            *)
-                echo -e "\e[1;31m[!] Invalid option.\e[0m"
-                sleep 1
-                ;;
-        esac
-    done
-fi
+CHOICE="$2"
+case "$CHOICE" in
+    1) DO_BUILD=1; DO_FETCH=0 ;;
+    2) DO_BUILD=0; DO_FETCH=1 ;;
+    3) DO_BUILD=1; DO_FETCH=1 ;;
+    *)
+        echo "Invalid --option argument: $CHOICE. Must be 1, 2, or 3."
+        exit 1
+        ;;
+esac
 
 MAKE_OPTS=(
     -j"${JOBS}"
@@ -333,18 +242,21 @@ if [[ ! -f Makefile ]] || ! grep -q "KERNELRELEASE" Makefile 2>/dev/null; then
     exit 1
 fi
 
-# if [[ ! -f .config ]]; then  # We need to update the config file even if .config exists from a prev. cached build
 if [[ -f config ]]; then
     echo -e "\e[1;34m[*]\e[0m Moving 'config' -> '.config'"
     mv config .config
-elif [[ ! -f .config ]]; then
-    echo -e "\e[1;31mERROR:\e[0m No .config or 'config' found." >&2
+else
+    echo -e "\e[1;31mERROR:\e[0m No .config found." >&2
     exit 1
 fi
 
 ensure_extra_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
 require_custom_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
 validate_extra_firmware_blob "${REQUIRED_PS4_SD8797_FW}"
+for blob in "${REQUIRED_PS4_AMDGPU_FW[@]}"; do
+    ensure_extra_firmware_blob "${blob}"
+    validate_extra_firmware_blob "${blob}"
+done
 echo -e "\e[1;34m[*]\e[0m Setting CONFIG_EXTRA_FIRMWARE_DIR=${FIRMWARE_DIR}"
 scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR "${FIRMWARE_DIR}"
 
@@ -374,25 +286,25 @@ if [[ "$DO_FETCH" == "1" ]]; then
             mkdir -p "$(dirname "${dest}")"
             echo -e "  \e[1;34m[↓]\e[0m Fetching: ${blob}"
 
-            FIRMWARE_URL="${FIRMWARE_URL_BASE}/${blob}"
+            FIRMWARE_URL="${FIRMWARE_URL_BASE}"
+            FIRMWARE_URL_FALLBACK=""
 
             if [[ -n "${FIRMWARE_URL_OVERRIDES[$blob]:-}" ]]; then
-                OVERRIDE="${FIRMWARE_URL_OVERRIDES[$blob]}"
-                if [[ "${OVERRIDE}" == "useCustomFirmware" ]]; then
+                if [[ ${FIRMWARE_URL_OVERRIDES[$blob]} == "useCustomFirmware" ]]; then
                     echo -e "  \e[1;31mERROR:\e[0m Requested custom built-in firmware for ${blob}, but it was not found in build directory.\n"\
                             " Please ensure the proper firmware exists in ${FIRMWARE_DIR}/${blob} . Exiting with error." >&2
                     exit 1
                 fi
-                
-                if [[ "${OVERRIDE}" == http* ]]; then
-                    FIRMWARE_URL="${OVERRIDE}"
-                else
-                    FIRMWARE_URL="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/${OVERRIDE}/${blob}"
-                fi
-                echo -e "  \e[1;33m[!] Using override URL for ${blob}:\e[0m\n      ${FIRMWARE_URL}"
+                COMMIT="${FIRMWARE_URL_OVERRIDES[$blob]}"
+                FIRMWARE_URL_FALLBACK="https://gitlab.com/kernel-firmware/linux-firmware/-/raw/${COMMIT}"
             fi
 
-            if curl -fsSL --retry 3 --retry-delay 2 "${FIRMWARE_URL}" -o "${dest}"; then
+            if [[ -n "${FIRMWARE_URL_FALLBACK}" ]]; then
+                FIRMWARE_URL="${FIRMWARE_URL_FALLBACK}"
+                echo -e '  \e[1;33m[!] Using non-default firmware for '${blob}'!\n  Using commit from '${FIRMWARE_URL}''
+            fi
+
+            if curl -fsSL --retry 3 --retry-delay 2 "${FIRMWARE_URL}/${blob}" -o "${dest}"; then
                 echo -e "  \e[1;32m[✓]\e[0m ${blob}"
             else
                 echo -e "  \e[1;31m[✗]\e[0m FAILED: ${blob}" >&2
@@ -413,300 +325,40 @@ if [[ "$DO_FETCH" == "1" ]]; then
 fi
 
 if [[ "$DO_BUILD" == "1" ]]; then
+    print_disclaimer
     echo -e "\e[1;34m[*]\e[0m Applying invariant config..."
 
-    LOCALVERSION_SUFFIX="-Strawberry-$(lto_label)$(southbridge_suffix)-"
+    LOCALVERSION_SUFFIX="-Strawberry-$(profile_label)-$(lto_label)"
 
-    # Build system / LTO
-    if [[ "$LTO_FLAVOR" == "full" ]]; then
-        echo -e "\e[1;34m[*]\e[0m Enabling FullLTO..."
-        scripts/config --disable CONFIG_LTO_CLANG_THIN
-        scripts/config --enable  CONFIG_LTO_CLANG_FULL
-    elif [[ "$LTO_FLAVOR" == "none" ]]; then
-        echo -e "\e[1;34m[*]\e[0m Disabling LTO..."
-        scripts/config --disable CONFIG_LTO_CLANG_THIN
-        scripts/config --disable CONFIG_LTO_CLANG_FULL
-    else
-        echo -e "\e[1;34m[*]\e[0m Enabling ThinLTO..."
-        scripts/config --enable  CONFIG_LTO_CLANG_THIN
-        scripts/config --disable CONFIG_LTO_CLANG_FULL
-    fi
+    echo -e "\e[1;34m[*]\e[0m Enabling $(lto_label)..."
+    apply_config_file "configs/lto-${LTO_FLAVOR}.cfg"
     scripts/config --disable CONFIG_LOCALVERSION_AUTO
     scripts/config --set-str CONFIG_LOCALVERSION "${LOCALVERSION_SUFFIX}"
 
-    # Kernel compression
-    scripts/config --disable CONFIG_KERNEL_XZ
-    scripts/config --enable  CONFIG_KERNEL_ZSTD
+    apply_config_file "configs/base.cfg"
 
-    # NUMA removal
-    scripts/config --disable CONFIG_NUMA
-    scripts/config --disable CONFIG_AMD_NUMA
-    scripts/config --disable CONFIG_X86_64_ACPI_NUMA
-    scripts/config --disable CONFIG_ACPI_NUMA
-    scripts/config --disable CONFIG_NUMA_MEMBLKS
-    scripts/config --disable CONFIG_NUMA_BALANCING
-
-    # Bare-metal PS4 target
-    scripts/config --disable CONFIG_HYPERVISOR_GUEST
-    scripts/config --disable CONFIG_PARAVIRT
-    scripts/config --disable CONFIG_PARAVIRT_XXL
-    scripts/config --disable CONFIG_KVM
-    scripts/config --disable CONFIG_KVM_AMD
-    scripts/config --disable CONFIG_KVM_INTEL
-
-    # PS4 firmware
-    scripts/config --enable  CONFIG_PS4_DMI_SPOOF
-    if [[ "$SOUTHBRIDGE" == "baikal" ]]; then
-        echo -e "\e[1;34m[*]\e[0m Enabling Baikal southbridge support..."
-        scripts/config --enable  CONFIG_X86_PS4_BAIKAL
+    if [[ "$BUILD_TYPE" == "debug" ]]; then
+        echo -e "\e[1;34m[*]\e[0m Applying debug config (configs/debug.cfg)..."
+        apply_config_file "configs/debug.cfg"
     else
-        echo -e "\e[1;34m[*]\e[0m Disabling Baikal southbridge support..."
-        scripts/config --disable CONFIG_X86_PS4_BAIKAL
+        echo -e "\e[1;34m[*]\e[0m Applying release config (configs/release.cfg)..."
+        apply_config_file "configs/release.cfg"
     fi
 
-    # Memory management / cgroup base
-    scripts/config --enable  CONFIG_CGROUPS
-    scripts/config --enable  CONFIG_MEMCG
-    scripts/config --enable  CONFIG_BLK_CGROUP
-    scripts/config --enable  CONFIG_CGROUP_WRITEBACK
-    scripts/config --enable  CONFIG_CGROUP_SCHED
-    scripts/config --enable  CONFIG_FAIR_GROUP_SCHED
-    scripts/config --disable CONFIG_RT_GROUP_SCHED
-    scripts/config --enable  CONFIG_CFS_BANDWIDTH
-    scripts/config --enable  CONFIG_CGROUP_PIDS
-    scripts/config --enable  CONFIG_LRU_GEN
-    scripts/config --enable  CONFIG_LRU_GEN_ENABLED
-    scripts/config --enable  CONFIG_LRU_GEN_STATS
-    scripts/config --enable  CONFIG_TRANSPARENT_HUGEPAGE
-    scripts/config --enable  CONFIG_SLUB_CPU_PARTIAL
-    scripts/config --enable  CONFIG_CGROUP_DMEM
-    scripts/config --enable  CONFIG_CGROUP_FREEZER
-    scripts/config --enable  CONFIG_CPUSETS
-    scripts/config --enable  CONFIG_CGROUP_DEVICE
-    scripts/config --enable  CONFIG_CGROUP_CPUACCT
-    scripts/config --enable  CONFIG_CGROUP_MISC
-    scripts/config --enable  CONFIG_CGROUP_BPF
-
-    # Namespace support needed by most cgroup/container userspace
-    scripts/config --enable  CONFIG_NAMESPACES
-    scripts/config --enable  CONFIG_UTS_NS
-    scripts/config --enable  CONFIG_TIME_NS
-    scripts/config --enable  CONFIG_IPC_NS
-    scripts/config --enable  CONFIG_USER_NS
-    scripts/config --enable  CONFIG_PID_NS
-    scripts/config --enable  CONFIG_NET_NS
-
-    scripts/config --disable CONFIG_ZSWAP_COMPRESSOR_DEFAULT_LZO
-    scripts/config --enable  CONFIG_ZSWAP_COMPRESSOR_DEFAULT_ZSTD
-    scripts/config --set-str CONFIG_ZSWAP_COMPRESSOR_DEFAULT "zstd"
-    scripts/config --disable CONFIG_ZRAM_DEF_COMP_LZ4
-    scripts/config --enable  CONFIG_ZRAM_DEF_COMP_ZSTD
-    scripts/config --set-str CONFIG_ZRAM_DEF_COMP "zstd"
-    scripts/config --enable  CONFIG_ZSWAP
-    scripts/config --enable  CONFIG_ZRAM
-
-    # Async I/O
-    scripts/config --enable  CONFIG_IO_URING
-
-    # Network
-    scripts/config --enable  CONFIG_TCP_CONG_BBR
-    scripts/config --set-str CONFIG_DEFAULT_TCP_CONG "bbr"
-    scripts/config --enable  CONFIG_NET_SCH_DEFAULT
-    scripts/config --enable  CONFIG_NET_SCH_FQ
-    scripts/config --enable  CONFIG_NET_SCH_FQ_CODEL
-    scripts/config --enable  CONFIG_NET_SCH_CAKE
-
-    # Crypto acceleration
-    scripts/config --enable  CONFIG_CRYPTO_AES_NI_INTEL
-    scripts/config --enable  CONFIG_CRYPTO_GHASH_CLMUL_NI_INTEL
-    scripts/config --enable  CONFIG_CRYPTO_POLYVAL_CLMUL_NI
-    scripts/config --enable  CONFIG_CRYPTO_LIB_SHA256
-
-    # Futex
-    scripts/config --enable  CONFIG_FUTEX
-    scripts/config --enable  CONFIG_FUTEX_PI
-    scripts/config --enable  CONFIG_FUTEX_PRIVATE_HASH
-    scripts/config --enable  CONFIG_FUTEX_MPOL
-
-    # NTSYNC
-    scripts/config --enable  CONFIG_NTSYNC
-
-    # Scheduler
-    scripts/config --enable  CONFIG_SCHED_CLASS_EXT
-    scripts/config --enable  CONFIG_SCHED_EXT
-    scripts/config --enable  CONFIG_SCHED_AUTOGROUP
-
-    # BPF
-    scripts/config --enable  CONFIG_BPF_SYSCALL
-    scripts/config --enable  CONFIG_BPF_JIT
-    scripts/config --enable  CONFIG_BPF_JIT_ALWAYS_ON
-    scripts/config --enable  CONFIG_BPF_JIT_DEFAULT_ON
-    scripts/config --disable CONFIG_BPF_UNPRIV_DEFAULT_OFF
-
-    # BTF / debug metadata
-    scripts/config --enable  CONFIG_DEBUG_INFO
-    scripts/config --enable  CONFIG_DEBUG_INFO_DWARF4
-    scripts/config --disable CONFIG_DEBUG_INFO_DWARF5
-    scripts/config --disable CONFIG_DEBUG_INFO_REDUCED
-    scripts/config --disable CONFIG_DEBUG_INFO_SPLIT
-    scripts/config --enable  CONFIG_DEBUG_INFO_BTF
-    scripts/config --enable  CONFIG_DEBUG_INFO_BTF_MODULES
-
-    # Runtime debug / tracing
-    scripts/config --disable CONFIG_DEBUG_KERNEL
-    scripts/config --disable CONFIG_PROVE_LOCKING
-    scripts/config --disable CONFIG_LOCKDEP
-    scripts/config --disable CONFIG_KASAN
-    scripts/config --disable CONFIG_FTRACE
-    scripts/config --disable CONFIG_SCHED_DEBUG
-    scripts/config --disable CONFIG_DEBUG_FS
-
-    # Mitigation / hardening trims
-    scripts/config --disable CONFIG_CPU_MITIGATIONS
-    scripts/config --disable CONFIG_STACKPROTECTOR
-    scripts/config --disable CONFIG_STACKPROTECTOR_STRONG
-    scripts/config --disable CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT
-    scripts/config --disable CONFIG_SLAB_FREELIST_HARDENED
-    scripts/config --disable CONFIG_SLAB_FREELIST_RANDOM
-    scripts/config --disable CONFIG_SHUFFLE_PAGE_ALLOCATOR
-    scripts/config --disable CONFIG_INIT_ON_ALLOC_DEFAULT_ON
-    scripts/config --disable CONFIG_INIT_ON_FREE_DEFAULT_ON
-    scripts/config --disable CONFIG_FORTIFY_SOURCE
-    scripts/config --disable CONFIG_HARDENED_USERCOPY
-    scripts/config --disable CONFIG_HARDENED_USERCOPY_DEFAULT_ON
-    scripts/config --disable CONFIG_SECURITY_DMESG_RESTRICT
-    scripts/config --disable CONFIG_IOMMU_DEFAULT_DMA_STRICT
-    scripts/config --disable CONFIG_IOMMU_DEFAULT_PASSTHROUGH
-    scripts/config --enable  CONFIG_IOMMU_DEFAULT_DMA_LAZY
-
-    # I/O schedulers
-    scripts/config --enable  CONFIG_MQ_IOSCHED_DEADLINE
-    scripts/config --enable  CONFIG_MQ_IOSCHED_KYBER
-    scripts/config --enable  CONFIG_IOSCHED_BFQ
-    scripts/config --enable  CONFIG_BFQ_GROUP_IOSCHED
-    scripts/config --enable  CONFIG_BLK_WBT
-    scripts/config --enable  CONFIG_BLK_WBT_MQ
-
-    # Strip debug overhead
-    scripts/config --disable CONFIG_DMADEVICES_DEBUG
-    scripts/config --disable CONFIG_DMADEVICES_VDEBUG
-    scripts/config --disable CONFIG_IOMMU_DEBUG
-    scripts/config --disable CONFIG_I2C_DEBUG_CORE
-    scripts/config --disable CONFIG_I2C_DEBUG_ALGO
-    scripts/config --disable CONFIG_I2C_DEBUG_BUS
-    scripts/config --disable CONFIG_DM_DEBUG
-    scripts/config --disable CONFIG_BLK_DEBUG_FS
-
-    if [[ "$PROFILE" == "server" ]]; then
+    if [[ "$PROFILE" == "server" || "$PROFILE" == "slopium" ]]; then
         echo -e "\e[1;34m[*]\e[0m Applying server profile..."
-
-        scripts/config --disable CONFIG_SCHED_AUTOGROUP
-        scripts/config --disable CONFIG_CPU_FREQ_GOV_REFLEX
-
-        scripts/config --disable CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
-        scripts/config --disable CONFIG_CPU_FREQ_GOV_SCHEDUTIL
-        scripts/config --enable  CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
-        scripts/config --enable  CONFIG_CPU_FREQ_GOV_PERFORMANCE
-
-        scripts/config --disable CONFIG_HZ_1000
-        scripts/config --disable CONFIG_HZ_300
-        scripts/config --disable CONFIG_HZ_100
-        scripts/config --enable  CONFIG_HZ_250
-        scripts/config --set-val CONFIG_HZ 250
-
-        scripts/config --enable  CONFIG_NO_HZ_IDLE
-        scripts/config --disable CONFIG_NO_HZ_FULL
-
-        scripts/config --disable CONFIG_PREEMPT
-        scripts/config --enable  CONFIG_PREEMPT_VOLUNTARY
-        scripts/config --disable CONFIG_PREEMPT_NONE
-
-        scripts/config --enable  CONFIG_PSI
-        scripts/config --enable  CONFIG_PSI_DEFAULT_DISABLED
-
-        scripts/config --enable  CONFIG_TRANSPARENT_HUGEPAGE
-        scripts/config --disable CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS
-        scripts/config --enable  CONFIG_TRANSPARENT_HUGEPAGE_MADVISE
-
-        scripts/config --enable  CONFIG_NETFILTER
-        scripts/config --enable  CONFIG_NETFILTER_ADVANCED
-        scripts/config --enable  CONFIG_NETFILTER_XTABLES
-        scripts/config --enable  CONFIG_NF_TABLES
-        scripts/config --enable  CONFIG_NF_TABLES_INET
-        scripts/config --enable  CONFIG_NF_TABLES_IPV4
-        scripts/config --enable  CONFIG_NF_TABLES_IPV6
-        scripts/config --enable  CONFIG_IP_NF_IPTABLES
-        scripts/config --enable  CONFIG_IP6_NF_IPTABLES
-        scripts/config --enable  CONFIG_BRIDGE
-        scripts/config --enable  CONFIG_BRIDGE_NETFILTER
-        scripts/config --enable  CONFIG_VETH
-        scripts/config --enable  CONFIG_OVERLAY_FS
-
-        scripts/config --set-str CONFIG_DEFAULT_IOSCHED "mq-deadline"
-
-        scripts/config --enable  CONFIG_DEFAULT_FQ
-        scripts/config --disable CONFIG_DEFAULT_FQ_CODEL
-        scripts/config --disable CONFIG_DEFAULT_FQ_PIE
-        scripts/config --disable CONFIG_DEFAULT_SFQ
-        scripts/config --disable CONFIG_DEFAULT_PFIFO_FAST
-        scripts/config --set-str CONFIG_DEFAULT_NET_SCH "fq"
+        apply_config_file "configs/tuning-server.cfg"
     else
         echo -e "\e[1;34m[*]\e[0m Applying general/gaming profile..."
+        apply_config_file "configs/tuning-general.cfg"
+    fi
 
-        scripts/config --disable CONFIG_CPU_MITIGATIONS
+    echo -e "\e[1;34m[*]\e[0m Applying PS4 specific debloat..."
+    apply_config_file "configs/debloat.cfg"
 
-        # Desktop userspace compatibility
-        scripts/config --enable  CONFIG_DMIID
-        scripts/config --enable  CONFIG_DMI_SYSFS
-        scripts/config --enable  CONFIG_FW_CFG_SYSFS
-
-
-        scripts/config --enable  CONFIG_CPU_FREQ_GOV_REFLEX
-        scripts/config --enable  CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
-        scripts/config --enable  CONFIG_CPU_FREQ_GOV_SCHEDUTIL
-        scripts/config --disable CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
-
-        scripts/config --enable  CONFIG_HZ_250
-        scripts/config --disable CONFIG_HZ_300
-        scripts/config --disable CONFIG_HZ_100
-        scripts/config --disable CONFIG_HZ_1000
-        scripts/config --set-val CONFIG_HZ 250
-        scripts/config --enable  CONFIG_NO_HZ_IDLE
-        scripts/config --enable  CONFIG_NO_HZ_FULL
-        scripts/config --enable  CONFIG_RCU_NOCB_CPU
-        scripts/config --enable  CONFIG_RCU_NOCB_CPU_DEFAULT_ALL
-
-        scripts/config --enable  CONFIG_PREEMPT
-        scripts/config --disable CONFIG_PREEMPT_VOLUNTARY
-        scripts/config --disable CONFIG_PREEMPT_NONE
-
-        scripts/config --enable  CONFIG_TRANSPARENT_HUGEPAGE
-        scripts/config --disable CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS
-        scripts/config --enable  CONFIG_TRANSPARENT_HUGEPAGE_MADVISE
-
-        scripts/config --disable CONFIG_OVERLAY_FS
-        scripts/config --disable CONFIG_VETH
-        scripts/config --disable CONFIG_BRIDGE_NETFILTER
-        scripts/config --disable CONFIG_BRIDGE
-        scripts/config --disable CONFIG_IP6_NF_IPTABLES
-        scripts/config --disable CONFIG_IP_NF_IPTABLES
-        scripts/config --disable CONFIG_NF_TABLES_IPV6
-        scripts/config --disable CONFIG_NF_TABLES_IPV4
-        scripts/config --disable CONFIG_NF_TABLES_INET
-        scripts/config --disable CONFIG_NF_TABLES
-        scripts/config --disable CONFIG_NETFILTER_XTABLES
-        scripts/config --disable CONFIG_NETFILTER_ADVANCED
-        scripts/config --disable CONFIG_NETFILTER
-
-        scripts/config --disable CONFIG_PSI
-        scripts/config --set-str CONFIG_DEFAULT_IOSCHED "bfq"
-
-        scripts/config --enable  CONFIG_DEFAULT_FQ_CODEL
-        scripts/config --disable CONFIG_DEFAULT_FQ
-        scripts/config --disable CONFIG_DEFAULT_FQ_PIE
-        scripts/config --disable CONFIG_DEFAULT_SFQ
-        scripts/config --disable CONFIG_DEFAULT_PFIFO_FAST
-        scripts/config --set-str CONFIG_DEFAULT_NET_SCH "fq_codel"
+    if [[ "$PROFILE" == "slopmax" || "$PROFILE" == "slopium" ]]; then
+        echo -e "\e[1;34m[*]\e[0m Applying KVM support..."
+        apply_config_file "configs/kvm.cfg"
     fi
 
     echo -e "\e[1;34m[*]\e[0m Running olddefconfig..."
@@ -718,8 +370,7 @@ if [[ "$DO_BUILD" == "1" ]]; then
     make "${MAKE_OPTS[@]}" prepare
 
     CURRENT_LTO_LABEL="$(lto_label)"
-    CURRENT_SOUTHBRIDGE_DISPLAY="$(southbridge_display)"
-    echo -e "\e[1;34m[*]\e[0m Building bzImage [profile: ${PROFILE}, LTO: ${CURRENT_LTO_LABEL}, southbridge: ${CURRENT_SOUTHBRIDGE_DISPLAY}] with ${JOBS} jobs..."
+    echo -e "\e[1;34m[*]\e[0m Building bzImage [profile: ${PROFILE}, LTO: ${CURRENT_LTO_LABEL}] with ${JOBS} jobs..."
     time make "${MAKE_OPTS[@]}" bzImage
 
     BZIMAGE="arch/x86/boot/bzImage"
@@ -735,45 +386,13 @@ if [[ "$DO_BUILD" == "1" ]]; then
     KVER="$(cat include/config/kernel.release 2>/dev/null || echo "unknown")"
     LTO_LABEL="${CURRENT_LTO_LABEL}"
 
-    PROFILE_LABEL="Server"
-    if [[ "$PROFILE" == "general" ]]; then
-        PROFILE_LABEL="General"
-    fi
-
-    SOUTHBRIDGE_SUFFIX="$(southbridge_suffix)"
+    PROFILE_LABEL="$(profile_label)"
     KVER_BASE="${KVER%%-*}"
-    RELEASE_TRACK="Mainline"
-    if [[ "$KVER_BASE" == 6.18.* ]]; then
-        RELEASE_TRACK="LTS"
-    fi
 
-    ARTIFACT_BASENAME="Strawberry-${LTO_LABEL}-${PROFILE_LABEL}${SOUTHBRIDGE_SUFFIX}-${RELEASE_TRACK}-${KVER}"
+    ARTIFACT_BASENAME="${KVER_BASE}-Strawberry-${PROFILE_LABEL}-${LTO_LABEL}"
     printf '%s\n' "${ARTIFACT_BASENAME}" > "${OUTPUT_DIR}/artifact_name.txt"
 
+    echo -e "\e[1;32m[✓]\e[0m Build complete [${PROFILE} / ${LTO_LABEL}] -> ${OUTPUT_DIR}/bzImage (${KVER})"
     echo ""
-    echo -e "\e[1;32m╔══════════════════════════════════════════════════╗\e[0m"
-    echo -e "\e[1;32m║\e[0m  Build complete! [${PROFILE} / ${LTO_LABEL} / ${CURRENT_SOUTHBRIDGE_DISPLAY}]$(printf "%-2s" "")\e[1;32m║\e[0m"
-    echo -e "\e[1;32m║\e[0m  Kernel : $(printf "%-39s" "${KVER}")\e[1;32m║\e[0m"
-    echo -e "\e[1;32m║\e[0m  bzImage: $(printf "%-39s" "${OUTPUT_DIR}/bzImage")\e[1;32m║\e[0m"
-    echo -e "\e[1;32m╚══════════════════════════════════════════════════╝\e[0m"
-    echo ""
-
-    if [[ "$PROFILE" == "general" ]]; then
-        echo "Kernel cmdline (add to your kexec invocation):"
-        echo "  isolcpus=2-7 nohz_full=2-7 rcu_nocbs=2-7 irqaffinity=0-1 threadirqs"
-        echo ""
-        echo "Post-boot sysctl (add to /etc/sysctl.d/99-ps4-gaming.conf):"
-        echo "  vm.swappiness = 10"
-        echo "  vm.dirty_ratio = 15"
-        echo "  vm.dirty_background_ratio = 5"
-        echo "  vm.compaction_proactiveness = 1"
-        echo ""
-        echo "Force GPU to max SCLK:"
-        echo "  echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level"
-        echo "  echo 2      > /sys/class/drm/card0/device/pp_dpm_sclk"
-        echo ""
-    fi
-
-    echo "Deploy to PS4:"
-    echo "  scp ${OUTPUT_DIR}/bzImage root@<ps4-ip>:/boot/bzImage"
+    print_disclaimer
 fi
