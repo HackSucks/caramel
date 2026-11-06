@@ -26,13 +26,13 @@
 #include <asm/i8259.h>
 #include <asm/reboot.h>
 #include <asm/msr.h>
+#include <asm/pci-direct.h>
 #include <asm/ps4.h>
 
 static bool is_ps4;
+static bool is_baikal;
 bool apcie_initialized;
-#ifdef CONFIG_X86_PS4_BAIKAL
 bool bpcie_initialized;
-#endif
 
 /*
  * The RTC is part of the Aeolia PCI device and will be implemented there as
@@ -55,15 +55,10 @@ int apcie_status(void)
 {
 	if (!is_ps4)
 		return -ENODEV;
-#ifdef CONFIG_X86_PS4_BAIKAL
 	return READ_ONCE(apcie_initialized) || READ_ONCE(bpcie_initialized);
-#else
-	return READ_ONCE(apcie_initialized);
-#endif
 }
 EXPORT_SYMBOL_GPL(apcie_status);
 
-#ifdef CONFIG_X86_PS4_BAIKAL
 int bpcie_status(void)
 {
 	if (!is_ps4)
@@ -71,16 +66,19 @@ int bpcie_status(void)
 	return READ_ONCE(bpcie_initialized);
 }
 EXPORT_SYMBOL_GPL(bpcie_status);
-#endif
+
+bool ps4_is_baikal(void)
+{
+	return is_baikal;
+}
+EXPORT_SYMBOL_GPL(ps4_is_baikal);
 
 void icc_reboot(void);
 
 static void ps4_emergency_restart(void)
 {
 	icc_reboot();
-#ifdef CONFIG_X86_PS4_BAIKAL
 	bpcie_icc_reboot();
-#endif
 }
 
 /*
@@ -90,6 +88,10 @@ void __init x86_ps4_early_setup(void)
 {
 	pr_info("x86_ps4_early_setup: PS4 early setup\n");
 	is_ps4 = true;
+	is_baikal = read_pci_config_16(0, 0x14, 4, PCI_DEVICE_ID) ==
+		    PCI_DEVICE_ID_SONY_BAIKAL_PCIE;
+	pr_info("x86_ps4_early_setup: southbridge %s\n",
+		is_baikal ? "Baikal" : "Aeolia or Belize");
 	x86_platform.calibrate_tsc = ps4_calibrate_tsc;
 	x86_platform.get_wallclock = dummy_get_wallclock;
 	x86_platform.set_wallclock = dummy_set_wallclock;

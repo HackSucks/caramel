@@ -47,7 +47,7 @@ extern int ps4_samu_ccp(void *op);
 extern int apcie_status(void);
 extern int apcie_icc_cmd(u8 major, u16 minor, const void *data,
 			 u16 length, void *reply, u16 reply_length);
-#ifdef CONFIG_X86_PS4_BAIKAL
+extern bool ps4_is_baikal(void);
 extern int bpcie_assign_irqs(struct pci_dev *dev, int nvec);
 extern void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs);
 extern void bpcie_icc_reboot(void);
@@ -57,33 +57,6 @@ extern int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
 extern int bpcie_icc_register_event_handler(u8 major, bpcie_icc_event_fn fn,
 					    void *ctx);
 extern void bpcie_icc_unregister_event_handler(u8 major);
-#else
-static inline int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
-{
-	return -ENODEV;
-}
-static inline void bpcie_free_irqs(unsigned int virq, unsigned int nr_irqs)
-{
-}
-static inline int bpcie_status(void)
-{
-	return -ENODEV;
-}
-static inline int bpcie_icc_cmd(u8 major, u16 minor, const void *data,
-				u16 length, void *reply, u16 reply_length)
-{
-	return -ENODEV;
-}
-static inline int bpcie_icc_register_event_handler(u8 major,
-						   bpcie_icc_event_fn fn,
-						   void *ctx)
-{
-	return -ENODEV;
-}
-static inline void bpcie_icc_unregister_event_handler(u8 major)
-{
-}
-#endif
 
 
 #else
@@ -105,6 +78,10 @@ static inline int apcie_icc_cmd(u8 major, u16 minor, const void *data,
 				u16 length, void *reply, u16 reply_length)
 {
 	return -ENODEV;
+}
+static inline bool ps4_is_baikal(void)
+{
+	return false;
 }
 static inline int bpcie_assign_irqs(struct pci_dev *dev, int nvec)
 {

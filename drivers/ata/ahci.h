@@ -488,7 +488,7 @@ struct ahci_controller{
 };
 
 void bpcie_sata_phy_init(struct device *dev, struct ahci_controller *ctlr);
-#ifdef CONFIG_X86_PS4_BAIKAL
+#ifdef CONFIG_X86_PS4
 int bpcie_baikal_sata_phy_init(struct pci_dev *pdev, void __iomem *ahci_mmio);
 #else
 static inline int bpcie_baikal_sata_phy_init(struct pci_dev *pdev,

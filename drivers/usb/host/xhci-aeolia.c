@@ -44,24 +44,25 @@ static void xhci_aeolia_quirks(struct device *dev, struct xhci_hcd *xhci)
 	 * Do not try to enable MSIs, we provide the MSIs ourselves
 	 * Do not touch DMA mask, we need a custom one
 	 */
-	xhci->quirks |= XHCI_PLAT | XHCI_PLAT_DMA;
+	xhci->quirks |= XHCI_PLAT_DMA;
 
-	xhci->imod_interval = 0;
+	if (to_pci_dev(dev)->device == PCI_DEVICE_ID_SONY_BAIKAL_XHCI) {
+		xhci->quirks |= XHCI_PLAT;
+		xhci->imod_interval = 0;
+	}
 }
 
 /* called during probe() after chip reset completes */
 static int xhci_aeolia_setup(struct usb_hcd *hcd)
 {
+	hcd_to_xhci(hcd)->imod_interval = 40000;
+
 	return xhci_gen_setup(hcd, xhci_aeolia_quirks);
 }
 
 static bool xhci_aeolia_is_baikal(struct pci_dev *dev)
 {
-#ifdef CONFIG_X86_PS4_BAIKAL
 	return dev->device == PCI_DEVICE_ID_SONY_BAIKAL_XHCI;
-#else
-	return false;
-#endif
 }
 
 static bool xhci_aeolia_has_middle_host(struct pci_dev *dev)
@@ -153,6 +154,14 @@ static int xhci_aeolia_probe_one(struct pci_dev *dev, int index)
 	retval = usb_add_hcd(hcd, irq, IRQF_SHARED);
 	if (retval)
 		goto put_usb3_hcd;
+
+	if (!xhci_aeolia_is_baikal(dev)) {
+		struct usb_hcd *usb3_hcd = xhci_get_usb3_hcd(xhci);
+
+		if (usb3_hcd && HCC_MAX_PSA(xhci->hcc_params) >= 4 &&
+		    !(xhci->quirks & XHCI_BROKEN_STREAMS))
+			usb3_hcd->can_do_streams = 1;
+	}
 
 	retval = usb_add_hcd(xhci->shared_hcd, irq, IRQF_SHARED);
 	if (retval)
@@ -343,6 +352,17 @@ static int ahci_init_one(struct pci_dev *pdev)
 	else
 		dev_info(&pdev->dev, "SSS flag set, parallel bus scan disabled\n");
 
+	if (!baikal) {
+		if (!(hpriv->cap & HOST_CAP_PART))
+			host->flags |= ATA_HOST_NO_PART;
+
+		if (!(hpriv->cap & HOST_CAP_SSC))
+			host->flags |= ATA_HOST_NO_SSC;
+
+		if (!(hpriv->cap2 & HOST_CAP2_SDS))
+			host->flags |= ATA_HOST_NO_DEVSLP;
+	}
+
 	if (pi.flags & ATA_FLAG_EM)
 		ahci_reset_em(host);
 
@@ -520,6 +540,11 @@ static void xhci_hcd_pci_shutdown(struct pci_dev *dev)
 	struct usb_hcd	   *hcd;
 	int idx;
 
+	if (dev->device == PCI_DEVICE_ID_SONY_AEOLIA_XHCI) {
+		usb_hcd_pci_shutdown(dev);
+		return;
+	}
+
 	axhci = pci_get_drvdata(dev);
 	if (!axhci)
 		return;
@@ -529,19 +554,21 @@ static void xhci_hcd_pci_shutdown(struct pci_dev *dev)
 			continue;
 
 		hcd = axhci->hcd[idx];
-		if (hcd &&
-		    test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags) &&
-		    hcd->driver->shutdown)
-			hcd->driver->shutdown(hcd);
+		if (!hcd || !test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags) ||
+		    !hcd->driver->shutdown)
+			continue;
+
+		hcd->driver->shutdown(hcd);
+		if (dev->device == PCI_DEVICE_ID_SONY_BELIZE_XHCI &&
+		    usb_hcd_is_primary_hcd(hcd) && hcd->irq > 0)
+			free_irq(hcd->irq, hcd);
 	}
 }
 
 static const struct pci_device_id pci_ids[] = {
 		{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_AEOLIA_XHCI) },
 		{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_BELIZE_XHCI) },
-#ifdef CONFIG_X86_PS4_BAIKAL
 		{ PCI_DEVICE(PCI_VENDOR_ID_SONY, PCI_DEVICE_ID_SONY_BAIKAL_XHCI) },
-#endif
 	{ /* end: all zeroes */ }
 };
 MODULE_DEVICE_TABLE(pci, pci_ids);
