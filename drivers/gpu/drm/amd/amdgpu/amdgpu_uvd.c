@@ -129,6 +129,7 @@ MODULE_FIRMWARE(FIRMWARE_POLARIS10);
 MODULE_FIRMWARE(FIRMWARE_POLARIS11);
 MODULE_FIRMWARE(FIRMWARE_POLARIS12);
 MODULE_FIRMWARE(FIRMWARE_VEGAM);
+MODULE_FIRMWARE("amdgpu/liverpool_refresh_uvd.bin");
 
 MODULE_FIRMWARE(FIRMWARE_VEGA10);
 MODULE_FIRMWARE(FIRMWARE_VEGA12);
@@ -208,6 +209,11 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 		break;
 #endif
 #ifdef CONFIG_DRM_AMDGPU_CIK
+	case CHIP_LIVERPOOL:
+		if (adev->pdev->device != 0x9923)
+			return -ENODEV;
+		fw_name = "amdgpu/liverpool_refresh_uvd.bin";
+		break;
 	case CHIP_BONAIRE:
 		fw_name = FIRMWARE_BONAIRE;
 		break;
