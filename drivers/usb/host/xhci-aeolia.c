@@ -379,16 +379,14 @@ static int ahci_init_one(struct pci_dev *pdev)
 
 	rc = ahci_host_activate(host, &ahci_sht);
 	dev_dbg(&pdev->dev, "ahci_host_activate returned %d\n", rc);
-	if (rc) {
-		goto host_deactivate;
-	}
+	if (rc)
+		goto release_host;
 
 	pm_runtime_put_noidle(&pdev->dev);
 	return 0;
 
-	host_deactivate:
-		ata_host_detach(host);
 	release_host:
+		axhci->host = NULL;
 	unmap_registers:
 		iounmap(hpriv->mmio);
 	release_mem_region:
