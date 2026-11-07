@@ -91,7 +91,6 @@ static const u32 gladius_golden_common_registers[] =
 	mmTA_CNTL_AUX, 0x000f000f, 0x00010000, //mod
 	mmTCC_CTRL, 0x00100000, 0x001ff07c, //mod
 	mmTCP_ADDR_CONFIG, 0x000003ff, 0x000000f7,
-	mmTCP_CHAN_STEER_HI, 0xffffffff, 0x00000000,
 	0xf9e, 0x00000001, 0x00000003, /* SEM_CHICKEN_BITS */	//DONE //2 on FAT
 	0x31da, 0x00000008, 0x00000008, /* SPI_RESET_DEBUG */ //DONE
 	0x2300, 0x000000ff, 0x00000000, /* SQ_CONFIG */ //DONE 1 on FAT
