@@ -811,7 +811,7 @@ int vce_liverpool_test_ib(struct amdgpu_ring *ring, long timeout)
 		return r;
 	memset_io(cpu, 0, 3 * PAGE_SIZE);
 	r = amdgpu_job_alloc_with_ib(adev, &adev->vce.entity, AMDGPU_FENCE_OWNER_UNDEFINED,
-		4096, AMDGPU_IB_POOL_DIRECT, &job, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST);
+		4096, AMDGPU_IB_POOL_DIRECT, AMDGPU_KERNEL_JOB_ID_VCN_RING_TEST, &job);
 	if (r)
 		goto free_bo;
 	words = job->ibs[0].ptr;

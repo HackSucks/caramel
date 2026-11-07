@@ -34,6 +34,7 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_atomic_state_helper.h>
 #include <drm/drm_edid.h>
 
 #include <drm/drm_bridge.h>
@@ -1347,6 +1348,9 @@ static struct drm_bridge_funcs ps4_bridge_funcs = {
 	.post_disable = ps4_bridge_post_disable,
 	.attach = ps4_bridge_attach,
 	.mode_set = ps4_bridge_mode_set,
+	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
 };
 
 int ps4_bridge_register(struct drm_connector *connector,

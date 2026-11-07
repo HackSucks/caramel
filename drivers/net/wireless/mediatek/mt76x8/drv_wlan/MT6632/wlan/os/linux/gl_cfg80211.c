@@ -1876,7 +1876,7 @@ void mtk_cfg80211_mgmt_frame_register(IN struct wiphy *wiphy,
 /*----------------------------------------------------------------------------*/
 int mtk_cfg80211_remain_on_channel(struct wiphy *wiphy,
 				   struct wireless_dev *wdev,
-				   struct ieee80211_channel *chan, unsigned int duration, u64 *cookie)
+				   struct ieee80211_channel *chan, unsigned int duration, u64 cookie, const u8 *rx_addr)
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
 	INT_32 i4Rslt = -EINVAL;
@@ -1885,8 +1885,7 @@ int mtk_cfg80211_remain_on_channel(struct wiphy *wiphy,
 	do {
 		if ((wiphy == NULL)
 		    || (wdev == NULL)
-		    || (chan == NULL)
-		    || (cookie == NULL)) {
+		    || (chan == NULL)) {
 			break;
 		}
 
@@ -1897,7 +1896,6 @@ int mtk_cfg80211_remain_on_channel(struct wiphy *wiphy,
 		DBGLOG(INIT, INFO, "--> %s()\n", __func__);
 #endif
 
-		*cookie = prGlueInfo->u8Cookie++;
 
 		prMsgChnlReq = cnmMemAlloc(prGlueInfo->prAdapter, RAM_TYPE_MSG, sizeof(MSG_REMAIN_ON_CHANNEL_T));
 
@@ -1908,7 +1906,7 @@ int mtk_cfg80211_remain_on_channel(struct wiphy *wiphy,
 		}
 
 		prMsgChnlReq->rMsgHdr.eMsgId = MID_MNY_AIS_REMAIN_ON_CHANNEL;
-		prMsgChnlReq->u8Cookie = *cookie;
+		prMsgChnlReq->u8Cookie = cookie;
 		prMsgChnlReq->u4DurationMs = duration;
 
 		prMsgChnlReq->ucChannelNum = nicFreq2ChannelNum(chan->center_freq * 1000);
@@ -1996,7 +1994,7 @@ int mtk_cfg80211_cancel_remain_on_channel(struct wiphy *wiphy, struct wireless_d
 int mtk_cfg80211_mgmt_tx(struct wiphy *wiphy,
 			struct wireless_dev *wdev,
 			struct cfg80211_mgmt_tx_params *params,
-			u64 *cookie)
+			u64 cookie)
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
 	INT_32 i4Rslt = -EINVAL;
@@ -2005,13 +2003,12 @@ int mtk_cfg80211_mgmt_tx(struct wiphy *wiphy,
 	PUINT_8 pucFrameBuf = (PUINT_8) NULL;
 
 	do {
-		if ((wiphy == NULL) || (wdev == NULL) || (params == 0) || (cookie == NULL))
+		if ((wiphy == NULL) || (wdev == NULL) || (params == 0))
 			break;
 
 		prGlueInfo = (P_GLUE_INFO_T) wiphy_priv(wiphy);
 		ASSERT(prGlueInfo);
 
-		*cookie = prGlueInfo->u8Cookie++;
 
 		/* Channel & Channel Type & Wait time are ignored. */
 		prMsgTxReq = cnmMemAlloc(prGlueInfo->prAdapter, RAM_TYPE_MSG, sizeof(MSG_MGMT_TX_REQUEST_T));
@@ -2033,7 +2030,7 @@ int mtk_cfg80211_mgmt_tx(struct wiphy *wiphy,
 			break;
 		}
 
-		prMsgTxReq->u8Cookie = *cookie;
+		prMsgTxReq->u8Cookie = cookie;
 		prMsgTxReq->rMsgHdr.eMsgId = MID_MNY_AIS_MGMT_TX;
 
 		pucFrameBuf = (PUINT_8) ((ULONG) prMgmtFrame->prPacket + MAC_TX_RESERVED_FIELD);

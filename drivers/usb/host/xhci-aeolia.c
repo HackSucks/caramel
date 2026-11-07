@@ -140,7 +140,7 @@ static int xhci_aeolia_probe_one(struct pci_dev *dev, int index)
 	if (!xhci_aeolia_is_baikal(dev)) {
 		struct usb_hcd *usb3_hcd = xhci_get_usb3_hcd(xhci);
 
-		if (usb3_hcd && HCC_MAX_PSA(xhci->hcc_params) >= 4 &&
+		if (usb3_hcd && GET_MAX_PSA_SIZE(xhci->hcc_params) >= 4 &&
 		    !(xhci->quirks & XHCI_BROKEN_STREAMS))
 			usb3_hcd->can_do_streams = 1;
 	}

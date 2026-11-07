@@ -200,9 +200,14 @@ struct drm_bridge_funcs {
 	 * New drivers shall set their mode in the
 	 * &drm_bridge_funcs.atomic_enable operation.
 	 */
+	void (*disable)(struct drm_bridge *bridge);
+	void (*post_disable)(struct drm_bridge *bridge);
 	void (*mode_set)(struct drm_bridge *bridge,
 			 const struct drm_display_mode *mode,
 			 const struct drm_display_mode *adjusted_mode);
+
+	void (*pre_enable)(struct drm_bridge *bridge);
+	void (*enable)(struct drm_bridge *bridge);
 
 	/**
 	 * @atomic_pre_enable:
