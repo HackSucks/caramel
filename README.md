@@ -102,15 +102,15 @@ people keep saying i stole their code. i wrote down whats really inside their ke
 
 ### Team
 
-- devs: arabpixel (ArabPixel), packagebob (feeRnt), professionalcummer, bjhabibie
+- devs: arabpixel (ArabPixel), packagebob (feeRnt), bjhabibie
 - coordination: eclipsed.starr (dreams-of-formaldehyde), hnoobi (TheVorkMan), vanillitefroyo
 
 ### Testers
 
-- baikal: blyadimir., dewaardt, ss6530, isitnull., shyxuo, zarbok., vanixidk (vanixvanixvanix), jhuhblya, louisianafriedchicken, hwangbokgukho, kingabut, izanhower, sgtxkitkat, rodrigo, sudofrontman, fluffysheep
-- belize: adanielg18 (angeldanielguerrerocarrera), gattodev_real (GattoDev-debug), angheloisfish, wondermine, nadaman, rzle, hnoobi (TheVorkMan), vanillitefroyo
-- aeolia: diema, lupusetflos, professionalcummer
-- testers and logs: bozo.ozod, erkki_69_men.com, bejolsurviva_66626, Bbang, gryoza, fleur, TheGreekOne, felix_suicide, tteons, Scrooge
+- baikal: blyadimir., dewaardt, ss6530, isitnull., shyxuo, zarbok., vanixidk (vanixvanixvanix), jhuhblya, mechanical, kingabut, izanhower, sgtxkitkat, rodrigo, sudofrontman, fluffysheep
+- belize: adanielg18 (angeldanielguerrerocarrera), gattodev_real (GattoDev-debug), angheloisfish, wondermine, nadaman, razzle, hnoobi (TheVorkMan), vanillitefroyo
+- aeolia: rmuxnet (me), diema, lupusetflos, bjhabibie
+- testers and logs: bozo.ozod, erkki_69_men.com, Bbang, gryoza, fleur, TheGreekOne, felix_suicide, tteons, Scrooge
 
 ### Special thanks
 
