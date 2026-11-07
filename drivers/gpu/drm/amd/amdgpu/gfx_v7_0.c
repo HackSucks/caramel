@@ -294,12 +294,17 @@ MODULE_FIRMWARE("amdgpu/liverpool_rlc.bin");
 MODULE_FIRMWARE("amdgpu/liverpool_mec.bin");
 MODULE_FIRMWARE("amdgpu/liverpool_mec2.bin");
 
-MODULE_FIRMWARE("amdgpu/gladius_pfp.bin");
-MODULE_FIRMWARE("amdgpu/gladius_me.bin");
-MODULE_FIRMWARE("amdgpu/gladius_ce.bin");
+MODULE_FIRMWARE("amdgpu/gladius_a_pfp.bin");
+MODULE_FIRMWARE("amdgpu/gladius_a_me.bin");
+MODULE_FIRMWARE("amdgpu/gladius_a_ce.bin");
+MODULE_FIRMWARE("amdgpu/gladius_a_mec.bin");
+MODULE_FIRMWARE("amdgpu/gladius_a_mec2.bin");
+MODULE_FIRMWARE("amdgpu/gladius_b_pfp.bin");
+MODULE_FIRMWARE("amdgpu/gladius_b_me.bin");
+MODULE_FIRMWARE("amdgpu/gladius_b_ce.bin");
+MODULE_FIRMWARE("amdgpu/gladius_b_mec.bin");
+MODULE_FIRMWARE("amdgpu/gladius_b_mec2.bin");
 MODULE_FIRMWARE("amdgpu/gladius_rlc.bin");
-MODULE_FIRMWARE("amdgpu/gladius_mec.bin");
-MODULE_FIRMWARE("amdgpu/gladius_mec2.bin");
 
 static const struct amdgpu_gds_reg_offset amdgpu_gds_reg_offset[] = {
 	{mmGDS_VMID0_BASE, mmGDS_VMID0_SIZE, mmGDS_GWS_VMID0, mmGDS_OA_VMID0},
@@ -1537,6 +1542,7 @@ static void gfx_v7_0_free_microcode(struct amdgpu_device *adev)
 static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 {
 	const char *chip_name;
+	const char *cp_name;
 	int err;
 
 	DRM_DEBUG("\n");
@@ -1568,27 +1574,34 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 		return -EINVAL;
 	}
 
+	cp_name = chip_name;
+	if (adev->asic_type == CHIP_GLADIUS) {
+		cp_name = (RREG32(0x203e) & 1) ? "gladius_a" : "gladius_b";
+		dev_info(adev->dev, "Gladius cp microcode %s (0x203e 0x%08x)\n",
+			 cp_name, RREG32(0x203e));
+	}
+
 	err = amdgpu_ucode_request(adev, &adev->gfx.pfp_fw,
 				   AMDGPU_UCODE_REQUIRED,
-				   "amdgpu/%s_pfp.bin", chip_name);
+				   "amdgpu/%s_pfp.bin", cp_name);
 	if (err)
 		goto out;
 
 	err = amdgpu_ucode_request(adev, &adev->gfx.me_fw,
 				   AMDGPU_UCODE_REQUIRED,
-				   "amdgpu/%s_me.bin", chip_name);
+				   "amdgpu/%s_me.bin", cp_name);
 	if (err)
 		goto out;
 
 	err = amdgpu_ucode_request(adev, &adev->gfx.ce_fw,
 				   AMDGPU_UCODE_REQUIRED,
-				   "amdgpu/%s_ce.bin", chip_name);
+				   "amdgpu/%s_ce.bin", cp_name);
 	if (err)
 		goto out;
 
 	err = amdgpu_ucode_request(adev, &adev->gfx.mec_fw,
 				   AMDGPU_UCODE_REQUIRED,
-				   "amdgpu/%s_mec.bin", chip_name);
+				   "amdgpu/%s_mec.bin", cp_name);
 	if (err)
 		goto out;
 
@@ -1597,7 +1610,7 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 			(adev->asic_type == CHIP_GLADIUS)) {
 		err = amdgpu_ucode_request(adev, &adev->gfx.mec2_fw,
 					   AMDGPU_UCODE_REQUIRED,
-					   "amdgpu/%s_mec2.bin", chip_name);
+					   "amdgpu/%s_mec2.bin", cp_name);
 		if (err)
 		{
 			pr_err("gfx7: Failed to validate ucode firmware \"%s\"\n", chip_name);
