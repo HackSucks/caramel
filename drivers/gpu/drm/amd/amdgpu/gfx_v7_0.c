@@ -75,7 +75,6 @@ static const u32 gladius_golden_common_registers[] =
 {
 	mmATC_MISC_CG, 0x000c0fc0, 0x000c0200,
 	mmCB_HW_CONTROL, 0x0001f3cf, 0x00007208,	// 0x2684
-	mmCB_HW_CONTROL_2, 0x0f000000, 0x0f000000,
 	mmCB_HW_CONTROL_3, 0x000001ff, 0x00000040,
 	mmDB_DEBUG2, 0xf00fffff, 0x00004400,  //previous 400
 	0x2285, 0xf000003f, 0x00000007, /* PA_CL_ENHANCE */ //DONE
