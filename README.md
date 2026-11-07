@@ -1,393 +1,253 @@
-Linux Kernel - On the Sony PlayStation 4
-========================================
+# Strawberry PS4 Linux
 
-This is a Linux kernel source tree tailored to run on exploitable PlayStation 4 systems with various subsystem patches from
-[fail0verflow](https://github.com/fail0verflow/ps4-linux),
-[eeply](https://github.com/eeply/ps4-linux),
-[Ps3itaTeam](https://github.com/Ps3itaTeam/ps4-linux),
-[rancido](https://github.com/rancido),
-valeryy (no GitHub - contributed to PS4 Baikal southbridges),
-[mircoho](https://github.com/ps4gentoo/ps4-linux-5.3.7),
-[codedwrench](https://github.com/codedwrench/ps4-linux/),
-[tihmstar](https://github.com/tihmstar/ps4-linux/tree/ps4-4.14.93-belize),
-[crashniels](https://github.com/crashniels/linux/),
-[saya](https://www.youtube.com/channel/UCc20KAcPCj9Ut8IQF3umSjg),
-[whitehax0r](https://github.com/whitehax0r/ps4-linux-baikal),
-[DFAUS](https://github.com/DFAUS-git/ps4-baikal-5.4.247-kernel), and others.
+one kernel for every ps4. aeolia, belize and baikal. fat, slim and pro. linux 7.3.3.
 
-For a more detailed credits section, check out [this page](https://dionkill.github.io/ps4-linux-tutorial/ending.html#kernel-developers).
+before this every southbridge had its own kernel and baikal was never really fixed, almost 6 years. this tree checks the southbridge at boot and runs the right paths for it. so its just one bzImage for all of them.
 
-This fork originally aimed to make the internal WiFi+Bluetooth modules on specific PlayStation 4 models with the Marvell 88w8897 combo card, internally known as Torus 2, functional. These cards usually fail on default kernels because of PS4 SDHCI and firmware/runtime quirks.
+## What works
 
-Over time it grew into a broader PS4-focused kernel tree covering graphics hotplug and bridge handling, HDMI audio, GPU clocking, thermal and LED control, fan control, firmware quirks, internal WiFi support, runtime stability, and newer desktop/container-oriented configuration paths.
+- hdmi output, the edid from your tv, hotplug
+- vulkan (radv) and opengl (radeonsi), gpu compute. not on pro yet, see known issues
+- hardware video decode and encode (uvd and vce), so hardware transcoding works
+- usb, sata hdd and ssd, blu-ray drive
+- ethernet. baikal with the new mts driver at full gigabit, aeolia and belize with sky2
+- wifi and bluetooth, ds4 reconnects with one press
+- cpu frequency scaling, fan, power led, power button, reboot and power off
+- spi flash read on baikal
+- tsc calibrated against the southbridge timer, high res timers on baikal
 
-The current stable integration branch in this repository is `7.0-Stable`. `7.0-Clean` is still present as a clean 7.0 baseline/staging branch, while the `rmux/*` branches are topic branches for focused display, networking, firmware, ICC, UART, runtime, LED/fan, and stability work. Older `6.18.x-Strawberry` branches are retained as previous Strawberry development and fallback lines.
+tested on baikal slim, baikal pro, belize slim and belize pro. aeolia runs the same code but nobody tested this release on aeolia yet.
 
-<br>
+## Known issues
 
--------
-## Current Status (`7.0-Stable`)
+- no vulkan on pro (gladius) yet, its registers still need fixing
+- aeolia ethernet can keep one cpu core busy, fix is in progress
+- samu ccp and trng are off for now, they break boot on belize slim and aeolia
+- belize rtc read fails at boot, the loader sets the time instead
+- dp link training errors in dmesg are harmless, display works
 
-- `7.0-Stable` is the current stable PS4-focused Linux 7.0 integration branch in this repository.
-- Hardware Bringup and Stability:
-  - Added measurement deadline to x86 PS4 calibration loop to prevent hangs on certain hardware.
-  - Hardened ICC IRQ and ioctl handling to improve system stability.
-  - Tightened APCIE MSI bookkeeping and hardened MSI paths for Liverpool/Gladius GPUs.
-  - Corrected fan threshold milli-Celsius handling and corrected fan threshold logic.
-  - Implemented firmware-based EDID loading for PS4 bridges.
-  - Fixed Belize bridge enable retry loops and DP retraining logic.
-  - Bounded EMC timer stabilization reads to prevent long boot delays.
-- Graphics and Audio:
-  - Added warnings for Liverpool SDMA ring test failures.
-  - Removed high-frequency debug logging from Radeon CIK interrupts.
-  - Fixed HDMI audio on Liverpool systems via IEC958 initialization.
-- Subsystem Fixes:
-  - xHCI Aeolia: Replaced printk-based timing hacks with proper `usleep` calls.
-  - xHCI Aeolia: Fixed AHCI host activation error paths.
-  - ICC: Replaced `mdelay` with `msleep` in shutdown and reboot paths to avoid busy-waiting.
-- Networking (Experimental):
-  - Advanced `sky2` fixes are being tested in `rmux/sky2/experimental-fixes` to resolve interrupt storms and memory leaks across all PS4 southbridge variations (Aeolia, Belize, Baikal).
-- Maintenance:
-  - Removed legacy BORE scheduler references.
-  - Updated build system to embed PS4 SD8797 firmware.
-  - Added new "strawberry" boot banner.
+## Install
 
-<br>
+you need the loader and an initramfs:
 
--------
-## Console Models and Southbridge
+- loader: [ps4-linux-loader](https://github.com/ps4-linux/ps4-linux-loader)
+- initramfs: [initramfs-ps4 by GattoDev](https://github.com/GattoDev-debug/initramfs-ps4/releases/latest)
 
-The CUH-1216/1215 models are definitively known to have Torus 2 models with problematic WiFi, along with some 11xx models with similar WiFi issues. The table below is conservative and combines historical compatibility notes with the current 7.0-Stable direction.
+put `bzImage` and `initramfs.cpio.gz` on a fat32 usb and send the loader payload.
 
-| Console Model | Variation | WiFi+BT Chip Present | Known Compatible / Relevant Branches |
-|---|---|---|---|
-| CUH-1216(A/B) | Phat - Belize B0 | Marvell 88w8897 / SD8897 / Torus 2 | `7.0-Stable`, `6.15.4`, `5.15.15` |
-| CUH-1215(A/B) | Phat - Belize | Marvell 88w8897 / SD8897 / Torus 2 | `7.0-Stable`, `6.15.4`, `5.15.15` |
-| CUH-1003 | Phat - Aeolia | Unknown | Historically `6.15.4`; test current 7.0-Stable per console |
-| CUH-1004A | Phat - Aeolia | Marvell 88w8797 / SD8797 / Torus 1 | Current SD8797 firmware workflow in `7.0-Stable`; historically `6.15.4` |
-| CUH-1116A | Phat - Aeolia | Unknown | Historically `6.15.4`; test current 7.0-Stable per console |
-| CUH-2215B | Slim - Baikal | Unknown | `5.4.247` |
-| CUH-2216A | Slim - Baikal B1 | MediaTek 7668 | `5.4.247` |
-| CUH-2216A | Slim - Belize | MediaTek 7668 | `5.15.15`; newer MediaTek fixes in `7.0-Stable` |
-| CUH-7116B | Pro - Baikal B1 | Unknown | `5.4.247` |
-| CUH-7202B | Pro - Baikal | Unknown | `5.4.247` |
+the loader picks the cmdline for your southbridge. if you want your own put it in `bootargs.txt` on the usb. uart console:
 
-```text
-A and B are hard-drive specifications: 500 GB vs 1000 GB.
+- baikal: `console=uart8250,mmio32,0xC890E000`
+- aeolia and belize: `console=uart8250,mmio32,0xd0340000`
 
-Aeolia, Belize, and Baikal are console southbridges.
-B0, B1, etc. are southbridge subrevisions.
+## Build
+
 ```
-
-### Firmware note for SD8797 / 88w8797
-
-Older SD8797 / 88w8797 Aeolia systems no longer need a separate "no built-in firmware" kernel variant in current builds.
-
-Current builds handle SD8797 firmware through the normal build workflow. The expected custom/Orbis-sourced firmware path is:
-
-```text
-extra_firmware/mrvl/sd8797_uapsta.bin
-```
-
-GitHub Actions fetches this firmware from the private firmware source before building. Local builders must make sure the file exists in the worktree before running the build. If SD8797 firmware is requested but missing, `build.sh` stops early instead of silently building a bad kernel.
-
-The table above is still conservative. It reflects confirmed reports from older release branches plus current `7.0-Stable` work, but newer 7.0 kernels should still be validated model-by-model.
-
-TODO: Add a fuller list of supported console models, southbridges, WiFi/BT chips, and compatible kernels.
-
-<br>
-
-----
-## Fixing the Wireless Card on CUH-1216 / CUH-1215
-
-The main patches which, in combination, fix the CUH-1216/1215 wireless module are:
-
-- [150 MHz rate limit quirk on the 88w8897 card's Function 0](https://github.com/feeRnt/ps4-linux-12xx/commit/df7f7dbb1b0fff6026e159540f029988c8067b70)
-- [Added SDIO ID for Function 0](https://github.com/feeRnt/ps4-linux-12xx/commit/f4835fb020010acff2b70e4c5fa9430e07f0073b)
-- [SDHCI host quirks for the PlayStation SDHCI host](https://github.com/feeRnt/ps4-linux-12xx/commit/e6f342df7737722d5e27f0ae3974e493c5fe4ca4)
-
-Only `SDHCI_QUIRK2_PRESET_VALUE_BROKEN` appears to be required now.
-
-Additional optional stability work:
-
-- [Extra retries for MMC CMD52/CMD53](https://github.com/feeRnt/ps4-linux-12xx/commit/c57162e5ec7a4aa3af3310a36dc963b5c0298dfe)
-
-The primary culprit behind the failed SDIO initialization appears to be that the card does not reliably support 208 MHz or 200 MHz operation on the PS4 SDHCI host. This causes tuning failures and other command failures during initialization.
-
-You can read more about the search for a solution [from here](https://ps4linux.com/forums/d/221-ps4-phat-wifi-fix-test-marvell-8897-torus-20/14).
-
-Through a lot of trial and error, this workaround eventually landed:
-
-<br>
-
-![Many of the kernels I had to compile and test before finally landing on the fix kernel](./IMAGES/github_pic2.png)
-
-Here is a screenshot with working internal WiFi and Bluetooth in the logs on an Arch Linux system running on my CUH-1216 console:
-
-<br>
-
-![Working WiFi image](./IMAGES/github_pic1.png)
-
-<br>
-
-Hard work paid off.
-
-<br>
-
-----
-## Branches
-
-The current branch layout is centered around `7.0-Stable` and topic branches.
-
-### Main 7.0 branches
-
-- `7.0-Stable`: current stable integration branch and recommended branch for normal builds.
-- `7.0-Clean`: clean 7.0 baseline/staging branch kept for reference and development.
-- `7.0-Clean-commit-cleanup-20260424`: cleanup snapshot from the 7.0-Clean line.
-- `7.0-ColorFix`: display/color-fix testing branch.
-- `7.0-Server-Test`: server-profile testing branch.
-- `7.0-ps4-unified`: older unified 7.0 work branch.
-- `7.0-Broken`: broken/testing branch; do not use as a release branch.
-
-### Current topic branches
-
-- `rmux/build/embed-sd8797-firmware`: SD8797 firmware embedding and private firmware workflow.
-- `rmux/icc/ps4-icc-hardening`: ICC hardening and cleanup work.
-- `rmux/uart/ps4-apcie-8250`: APCIE / 8250 UART work.
-- `rmux/display/ps4-bridge-6154-behavior`: bridge behavior work.
-- `rmux/display/ps4-fixed-bridge-modes`: fixed bridge mode handling.
-- `rmux/display/ps4-safe-60hz-modes`: safe 60 Hz bridge/display modes.
-- `rmux/display/ps4-belize-enable-attempts`: Belize bridge enable retry handling.
-- `rmux/display/ps4-bridge-enable-state`: bridge enable-state handling.
-- `rmux/display/ps4-belize-post-enable-retrain`: DP retraining after Belize bridge enable.
-- `rmux/perf/ps4-disable-mtk-powersave`: MediaTek WiFi power-save disabling.
-- `rmux/perf/ps4-disable-mwifiex-powersave`: mwifiex power-save disabling.
-- `rmux/perf/ps4-fan-skip-duplicate-threshold`: duplicate fan threshold write suppression.
-- `rmux/perf/ps4-led-skip-duplicates`: duplicate LED update suppression.
-- `rmux/perf/ps4-led-fan-overhead`: LED/fan runtime overhead reduction.
-- `rmux/perf/ps4-quiet-icc-boot`: quieter ICC normal-path boot logs.
-- `rmux/perf/ps4-runtime-polish`: runtime polish and cleanup.
-- `rmux/stability/ps4-pwrbutton-teardown`: power-button input teardown fix.
-- `rmux/stability/ps4-led-blocking-callbacks`: blocking LED callback handling.
-- `rmux/fixes/ps4-stability-surgical-fixes`: focused PS4 stability fixes.
-- `Kollias`: contributor/test branch.
-
-### Older Strawberry branches
-
-- `6.18.21-Strawberry`: previous Strawberry 6.18.21 branch.
-- `6.18.21-NoDrmDbg`: 6.18.21 branch with DRM debug changes stripped or adjusted.
-- `6.18.21-HotPlug`: 6.18.21 hotplug-focused branch.
-- `6.18.21-Strawberry-GpuWork`: 6.18.21 GPU work branch.
-- `6.18.20-Strawberry`: previous 6.18.20 Strawberry branch.
-- `6.18.20-Strawberry-Main`: 6.18.20 main Strawberry branch.
-- `6.18.18-Strawberry`: older 6.18.18 Strawberry branch.
-
-Only `7.0-Stable` should be presented as the current recommended branch. The `rmux/*` branches are development/topic branches, and the older `6.18.x-Strawberry` branches are retained for reference, testing, and fallback.
-
-<br>
-
----
-## Compile and Build
-
-The current workflow is centered around `build.sh`, also called the Strawberry Builder, and the consolidated GitHub Actions workflow `.github/workflows/build-kernel_latest.yaml`.
-
-GitHub Actions:
-
-- Run `build-kernel_latest.yaml` from the Actions tab.
-- Pick `profile=Server` or `profile=General`.
-- Pick `lto=ThinLTO` or `lto=FullLTO`.
-- The workflow fetches the private SD8797 firmware before the build and places it at `extra_firmware/mrvl/sd8797_uapsta.bin`.
-
-Profile summary:
-
-- `Server`: headless/services-oriented, `HZ=250`, `PREEMPT_VOLUNTARY`, performance governor, and container/netfilter stack kept enabled.
-- `General`: desktop/gaming-oriented, `HZ=250`, full `PREEMPT`, schedutil/reflex path, cgroup and namespace support enabled, `DMI`/`fw_cfg` sysfs enabled, and netfilter stack stripped.
-
-Local build:
-
-```bash
-git clone https://github.com/rmuxnet/ps4-linux-12xx --branch 7.0-Stable --depth=3
-# Keep a low depth to save space.
-
-cd ps4-linux-12xx
-
-# Local builds require the custom SD8797 firmware when requested by the config.
-# Place it here before building:
-# extra_firmware/mrvl/sd8797_uapsta.bin
-
-# Fetch required non-custom firmware into extra_firmware/ and build with the
-# General profile using ThinLTO.
 ./build.sh --option 3 use=General lto=ThinLTO
-
-# Example: build a Server-profile kernel with FullLTO.
-./build.sh --option 3 use=Server lto=FullLTO
 ```
 
-The builder will:
+`--option 1` builds, `--option 2` fetches firmware, `--option 3` does both. clang only. `./build.sh --help` shows the profiles. output is `out/bzImage`.
 
-- move `config` to `.config` automatically if needed;
-- ensure `CONFIG_EXTRA_FIRMWARE` includes `mrvl/sd8797_uapsta.bin`;
-- stop early if the required custom SD8797 firmware is missing;
-- fetch every non-custom blob listed in `CONFIG_EXTRA_FIRMWARE` into `extra_firmware/`;
-- set `CONFIG_EXTRA_FIRMWARE_DIR` to the local `extra_firmware/` directory;
-- apply the selected profile and LTO settings;
-- build `bzImage` with LLVM;
-- write outputs to `out/`:
-  - `bzImage`
-  - `.config`
-  - `artifact_name.txt`
+if you want to contribute fork it and open a merge request. dont base a kernel on this one, dump it into a .patch repo and call it your own work.
 
-If you need a more manual path, you can still do:
+## Showcase
 
-```bash
-mv config .config
-make -j"$(nproc)" LLVM=1 olddefconfig
-make -j"$(nproc)" LLVM=1 prepare
-make -j"$(nproc)" LLVM=1 bzImage
-make -j"$(nproc)" LLVM=1 modules
+hardware transcoding on a baikal slim. obs records the screen with the vce encoder at 60fps while mpv plays a video on uvd, cpu stays low. click the picture for the video:
+
+[![hardware transcoding](docs/hwtranscode.jpg)](docs/hwtranscode.mp4)
+
+streaming the ps4 desktop with moonlight, 1080p 60fps h264 from the hardware encoder, vkcube running on radv:
+
+![moonlight](docs/moonlight.png)
+
+desktop and vulkan on 7.3.3, vulkaninfo shows radv on liverpool:
+
+[![desktop and vulkan](docs/desktop-vulkan.jpg)](docs/desktop-vulkan.mp4)
+
+usb, ethernet, wifi and bluetooth:
+
+[![usb, network and bluetooth](docs/usb-net-bt.jpg)](docs/usb-net-bt.mp4)
+
+## About KHEOPS
+
+KHEOPS is saya's kernel pack. it only ever ships prebuilt bzImages, never source. for months saya, seuros and others on their side have told people that i steal their code and that my kernels are vibe coded.
+
+i didnt answer with words. below is whats actually inside their kernels, what they said themselves, and whats inside the kernels that went around with my name swapped out. everything here can be checked.
+
+### The teardown
+
+KHEOPS v2.1 is 14 prebuilt kernels with no source. i took them apart, the 6.15.4 builds in detail. every point below has the addresses and bytes in my notes.
+
+and that was on purpose. on july 27, before the release, someone asked saya "will the source be released with it?". he answered "NEVER". later he said he links the original trees and "le reste c'est mon travail" (the rest is my work). the gpl does not work like that. if you ship a kernel binary you ship the full source of it, your own changes included. linking crashniels tree does not cover the bridge changes he made.
+
+where the code comes from:
+
+- the base is crashniels public 6.15.y tree. their own file names even say it: `6.15.4.src-crashniels_KHEOPS_FullLTO-v2.1_...`. strings that only exist in his tree are in the binary, for example the `apcie_assign_irqs(%d) (%d)` format and the `ps4_bridge_get_modes` print at info level
+- every gpu table in cik.c is byte identical to the public tree. 25 of 25 found, gladius included
+- every ps4 driver string from `arch/x86/platform/ps4` and `drivers/ps4` is in the binary. 0 missing
+- a full string scan against the whole crashniels tree finds no new code. the only new strings are the wifi driver
+- wifi is not theirs either. its the yhpgi mt7668s unstable driver, moved into the tree with amorghus patch for 6.15.4
+- the rest is public stuff: prjc bmq scheduler, ntsync, graysky cpu flags, tkg config patches
+
+what they changed:
+
+- the hdmi bridge. the 4k build offers one mode only, 3840x2160 at 60hz, and accepts nothing else
+- the pci vendor check in the bridge enable is removed
+- one bridge register write (`0x6020 = 0x00`) is dropped from the enable sequence. the rest of the 76 commands is the same as the source
+- thats it. nothing in the gpu, nothing in the southbridge drivers
+
+what is broken:
+
+- the multi resolution builds offer 2160p60 and 4096x2160p60, then their own mode check rejects both. what you can really use is 1080p60, 1080p100, 1080p120, 720p and 2160p30
+- the single resolution builds drop the preferred flag on their only mode, which crashniels added back in august 2025
+- 5 of the builds have no wifi driver but still carry all 9 mt7668 firmware blobs
+
+what is missing:
+
+- hardware video. the binary has no liverpool uvd or vce firmware at all, so the video engines never start and everything decodes and encodes on the cpu. on october 23 GattoDev asked saya "yall got hardware transcoding yet?", he changed the subject to game tests. this tree has both, see the showcase
+- edid. the bridge never reads your tv. it hands out a fixed list of modes and clears the edid. thats why saya tells people to make a fake `edid.bin` for their tv. on october 3 he blamed "the shit edid by bzImage rmux" for a 32" tv showing as 55" in fastfetch. that number comes from the tv itself. this tree reads the real edid from your tv over the hdmi bridge and passes it on
+
+the firmware:
+
+- the built in firmware list is the exact list string from feeRnts tree and mine
+- all 9 mt7668 blobs are md5 identical to the ones in our `extra_firmware`
+
+### The 7.0 kernels
+
+on may 8 2026 vvsx87 posted a "7.0.4 belize" kernel in the ps4linux discord. on may 9 saya showed off a "7.0.4.src-KHEOPS-FullLTO-v2.1_1080p60Hz_aeolia-belize" build. when people asked for the source he wrote "My source ... For you ? Never". he never released that kernel or its source.
+
+on may 10 my baikal 7.0 bringup went into my tree. on may 14 and 15 vvsx87 posted "7.0.6 baikal" and "7.0.7 baikal" kernels. no source, no fork, no credit.
+
+on october 5 saya explained himself how his 7.x would come out:
+
+> Version 7.x will arrive... whether from this source or another. It doesn't matter if it comes from Team Kheops, a contributing member, or someone else entirely... I'll tweak it and implement all my own additions... my personal signature.
+
+in the same message he calls himself "the first to pack a bzImage kernel with so many features: NTFS, Btrfs, full LTO, zram". those are config switches every kernel has.
+
+### The 7.2.3 "Flawless" kernel
+
+on september 5 2026 vvsx87 shared a kernel called `7.2.3-Flawless-NTSync-FullLTO`, built by `vvsx87@cachyos-ps4` that same morning. its own boot log prints my banner:
+
+```
+Strawberry PS4 Linux
+Release   : 7.2.3-Flawless-NTSync-FullLTO
+Builder   : vvsx87@cachyos-ps4
 ```
 
-<br>
+the binary has my code in it. none of this exists in crashniels tree, all of it was in my public tree months before:
 
----
-## Releases and Downloads
+- the strawberry banner. `init: add strawberry banner`, in my tree since may 2026
+- `PS4 GPU IRQ: vector`, from `amdgpu: require MSI/MSI-X for PS4 Liverpool IRQs`, may 2026
+- `PS4 fan hwmon ready`, my fan driver, may 2026
+- `ps4-buzzer`, my buzzer driver, may 2026
+- `ps4-cpufreq`, my cpufreq driver, august 2026
 
-To get pre-compiled kernels, go to the [releases section](https://github.com/rmuxnet/ps4-linux-12xx/releases), then choose a `bzImage` based on your console model, southbridge, and branch requirements.
+two weeks later, on september 18, he showed `7.2.6-Flawless-FullLTO`. the banner is still mine, line for line, he only swapped the word "Strawberry" for "Flawless":
 
-Read the release notes before booting a kernel. They may contain model-specific notes, firmware details, known regressions, or required userspace changes.
-
-<br>
-
----
-## Contributing
-
-If something does not work on these kernels, a feature is missing, or your model still has unsupported WiFi/Bluetooth, please open a GitHub issue or start a discussion with as much detail as possible.
-
-- Issues: https://github.com/rmuxnet/ps4-linux-12xx/issues
-- Discussions: https://github.com/rmuxnet/ps4-linux-12xx/discussions
-
-Useful information includes:
-
-- console model, for example `CUH-1216A`;
-- southbridge, if known: Aeolia, Belize, Baikal, etc.;
-- WiFi/BT chip, if known;
-- kernel branch and commit;
-- boot logs, `dmesg`, and relevant errors;
-- whether HDMI, WiFi, Bluetooth, fan control, LEDs, power button, and Ethernet work.
-
-Pull requests and code contributions are welcome. When submitting a pull request, please ensure the following:
-
-- **Problem Description**: Clearly explain the issue or limitation being addressed.
-- **Technical Solution**: Describe how the change solves the problem. Mention specific registers, logic changes, or architectural decisions.
-- **Benefits and Rationale**: Explain the gain from the change, such as improved stability, performance, or hardware compatibility.
-- **Verification**: State how the change was tested and on which console models/southbridges.
-
-<br>
-
----
-## Licensing
-
-### Firmware and Drivers Notice
-
-This repository includes non-GPL firmware/cfg blobs under `extra_firmware/`.
-
-These files, such as Marvell and MediaTek firmware, are distributed under their respective vendor licenses and are not covered by the GPL.
-
-See `extra_firmware/README.license` for details.
-
-There is an additional Dual BSD 3-Clause and GPLv2 license for the MediaTek wireless driver in:
-
-```text
-drivers/net/wireless/mediatek/mt76x8/**
+```
+Flawless PS4 Linux
+Platform  : Sony PlayStation 4
+Release   : 7.2.6-Flawless-FullLTO
+Builder   : vvsx87@vvsx87-artix
 ```
 
-See `drivers/net/wireless/mediatek/mt76x8/README.license` for details.
+![flawless 7.2.6](docs/flawless-726-banner.png)
 
-The rest of the repository and code is under the same terms as the Linux kernel, GPLv2, unless noted otherwise.
+same day his "PS4 LED Control" app shows the exact patterns of my led driver from march 2026: orange white, pulsate orange, orange white blue, violet blue, pink, pink blue, purple.
 
-<br>
+![flawless led](docs/flawless-726-led.png)
 
----
-## Documentation, Guides and the PS4 Linux Future
+my tree with a new name and a bumped version. thats why i made the source private that same day, and why its public again now with every commit and author in it.
 
-While many long-standing PS4 Linux kernel and userspace issues have been fixed over the years, some problems still exist and are not always actively worked on.
+his own screenshot from that morning, running it:
 
-A few honorable mentions aimed at improving the scene:
+![flawless](docs/flawless-screenshot.png)
 
-### 1. Blackscreen / No Display / Unsupported Monitor issues
+his full boot log with my banner: [flawless-bootlog.txt](docs/flawless-bootlog.txt)
 
-- https://github.com/oberdfr/kernel-ps4linux/tree/ps4-linux-v6.17.1-custom-resolution
+### The DDR3 article
 
-  Attempts to use display EDID information from the monitor inside Linux. This aims to improve blackscreen issues on monitors that do not support 1080p, or when using capture cards.
+[this article](https://ps4linux.com/ps4-pro-ddr3-patch-linux-debarshi/) came out on november 5. it says a KHEOPS member made the ps4 pro ddr3 read speed go from 10.6MB/s to 504MB/s by reverse engineering the os kernel with ai, and that this makes games, shaders and swap faster.
 
-  Work in progress.
+thats not how the hardware works:
 
-- https://github.com/ps4gentoo/initramfs
-- https://github.com/ps4boot/ps4-linux-payloads/
+- the 1GB ddr3 on the pro belongs to the southbridge. its not the main ram. games and the gpu run from the gddr5 on the apu. fail0verflow already showed this in their [33c3 slides](https://fail0verflow.com/media/33c3-slides/): the southbridge is an arm soc with its own ddr ram, and it runs freebsd in standby mode for the background downloads
+- so speeding up that ddr3 does nothing for games, shader loading or swap
+- the kernel was never released, so nobody could even check the numbers
+- the update in the same article already backs off and says it probably wont help games
 
-  Same general goal as the previous link, but these attempt to acquire EDID from Orbis through the PS4 Linux loader and copy it into the initramfs.
+and on november 6, when someone asked if the ddr3 patch will get source, seuros answered himself:
 
-  Work in progress; latest fixes may not have been committed yet.
+> it useless . It more a research exercise than something you can use.
 
-### 2. Mainlining PS4-specific patches and packages
+the dev behind it replied "that's true".
 
-See:
+the newer build was never released. an earlier one from august 28 (`6.8.12.DEB-neo-WorkStation-GPU-compute-DDR3`) is out there and already has the ddr3 driver. what it really does:
 
-- https://github.com/Jaguarlinux/
-- https://github.com/centi07/arch-ps4-aur
-- https://github.com/FalsePhilosopher/mesa-docker-ps4
+- no dma engine at all. reads and writes are a plain cpu `memcpy`
+- it maps one hardcoded address, `0x80000000`, 1 GiB, as normal cached memory. it does not even ask the pci device where its window is
+- that address is the southbridge memory window. mapping a pcie window as cached memory is why reads look faster
+- it always takes 1 GiB, also on fat and slim consoles where the southbridge only has 256 MB behind that window
 
-### 3. General discussion and help
+### What each side released
 
-- https://ps4linux.com/
-- https://discord.gg/QtcPmzHVVm - PS4-Linux Server Discord
-- https://discord.gg/jebUjgBu6T - ps4gentoo/ps4boot Discord
+- KHEOPS: prebuilt bzImages only. no source, no commits, nothing to review. the code inside comes from public trees
+- the ddr3 patch: no kernel, no source, only an article and a table of numbers
+- seuros: on october 4 he wrote "I'm not releasing anything yet". his github has 482 public repos. every ps4 linux one is a fork of someone elses tree, the only one of his own is a list of offsets. we could not find any ps4 linux code he wrote
+- this tree: every commit is public with its author, every release was booted on real consoles with logs from testers
 
-### 4. Other useful PS4 Linux links
+on october 3 seuros wrote that i "could not make video working". hardware decode and encode both work here, its the first video in the showcase.
 
-- https://github.com/Hakkuraifu/PS4Linux-Documentation - early PS4 Linux documentation
-- https://github.com/Ps3itaTeam/ - fan control, kernel, graphics drivers, etc.
-- https://github.com/ErkkolaMaitohappo/arch-ps4-aur-smth-fork - clean Arch Linux on PS4
-- https://github.com/7coil/archlinux-on-ps4 - Arch Linux on PS4, automated to fetch latest release
-- https://github.com/Dr4kk3N/dkn-overlay - Gentoo overlay for PS4 Linux
-- https://github.com/Hakkuraifu/PS4Linux-ArchDrivers - Arch-based graphics drivers
-- https://github.com/rinsuki/ps4linux-video-drivers - Arch-based graphics drivers
-- https://github.com/IT-Mania/PS4linux-deb/ - Debian-based graphics drivers
-- https://github.com/DionKill/ps4-video-archlinux - Arch-based graphics drivers
-- https://github.com/noob404yt/ - MediaTek drivers, Pop!_OS drivers
-- https://github.com/TigerClips1/ - developer of PS4 JaguarLinux
+on october 4 he also said i cant make progress "while my code is hidden". his code was never public, so it was never in this tree. since then this tree got hardware video, one kernel for all southbridges, the samu crypto, baikal ethernet and flash, and the 7.3 port.
 
-For an instructional manual on installation and other topics, refer to this [all-around guide](https://dionkill.github.io/ps4-linux-tutorial/).
+on november 1 MSI_Ins_Dir from their side wrote "our team doesn't have Baikal, and that's why we don't have any Baikal-based development". the next day saya said the same himself: "For Baikal, I haven't moved past kernel 5.4.x yet (which, incidentally, wasn't originally my own work)". so the "7.0.6 baikal" and "7.0.7 baikal" kernels vvsx87 posted in may did not come from them. in his message MSI_Ins_Dir also said we stole their work "in such a way that you can't tell it was stolen". you cant compare against code that was never published.
 
----
-<p align="center">Enjoy your Linux-Station!</p>
+on october 25 saya wrote "the more we release, the more he will want to steal data and claim it as his own". there is nothing to steal. KHEOPS never published any source, only binaries, and those binaries are built from crashniels public tree. the same tree this one is based on and credits.
 
----
-<br>
+## Credits
 
-Generic Linux Kernel Documentation
-------
+### PS4 Linux
 
-There are several guides for kernel developers and users. These guides can be rendered in a number of formats, including HTML and PDF. Please read `Documentation/admin-guide/README.rst` first.
+- fail0verflow, the original ps4 linux
+- whitehax0r, the original 5.4 baikal bringup (ps4-linux-baikal). this opened the door
+- crashniels, the ps4 tree this is based on
+- Package (feeRnt), original 6.15 aeolia and belize source, mt7668 wifi, ci and lots of bridge fixes
+- Blyadimir, uart, usb, display, endless testing. this work wouldnt exist without him
+- deWaardt, baikal hardware maintainer, early tests
+- leg (eclipsed.starr), bzImage uploads, coordination
+- M H (mircoho), ioremap, ethernet and apcie fixes
+- Anthony Maniatopoulos, gladius gpu setup and the smu through samu
+- Regie Vorkman (TheVorkMan, Regus Prime), dmi strings and testing
+- Comfy702, mt7668 bluetooth on baikal
 
-To build the documentation, use:
+### Loader
 
-```bash
-make htmldocs
-```
+- marcan, shuffle2, eeply, rancido, valeryy, ethylamine, Joonie86 (linux)
+- sleirsgoevy, AlAzif, KiwiDog, Specter, Celesteblue, ChendoChap, zecoxao, SocraticBliss, ctn123 (exploits)
+- bestpig, EchoStretch, EinTim23, tihmstar, ArabPixel (offsets)
+- ArabPixel and me, firmware and southbridge agnostic loader
 
-or:
+### Initramfs and guide
 
-```bash
-make pdfdocs
-```
+- GattoDev, [initramfs-ps4](https://github.com/GattoDev-debug/initramfs-ps4) (based on better-initramfs)
+- DionKill, [ps4 linux setup guide](https://dionkill.github.io/ps4-linux-tutorial/)
 
-The formatted documentation can also be read online at:
+### Team
 
-```text
-https://www.kernel.org/doc/html/latest/
-```
+- devs: ArabPixel, Package (feeRnt), bzz, bjhabibie
+- coordination: leg, Regus Prime, froyo
 
-There are various text files in the `Documentation/` subdirectory. Several of them use reStructuredText markup.
+### Testers
 
-Please read `Documentation/process/changes.rst`, as it contains the requirements for building and running the kernel, along with information about problems that may result from upgrading your kernel.
+- baikal: Blyadimir, deWaardt, §§ (ss6530), Is it Null?, shy, Zarbok, vanix, jhuhblya, mechanical, hwangbokgukho, kingabut, izanhower, sgtxkitkat, rodrigo, sudofrontman
+- belize: DANIELG18, GattoDev, Anghelo, Wonderfiend, Nadaman, Razzle, Regus Prime, froyo, флуффишиип
+- aeolia: Diema, GMV, bzz
+- testers and logs: Manya4090, Bozo, ErKkI, secret kejops spying, Bbang, Gryoza, fleur, TheGreekOne, felix_suicide, tteons, Scrooge
+
+### Special thanks
+
+- SyrianClippy, emotional support
+
+### Maintainer
+
+- me, Dievas (7xkq / rmux)
