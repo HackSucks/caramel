@@ -1077,6 +1077,10 @@ static void ps4_bridge_hdmi_event(void *ctx, u16 minor, const u8 *data,
 		copy = kmemdup(edid, edid_size, GFP_KERNEL);
 		if (!copy)
 			return;
+		if (copy[0] && !memchr_inv(copy + 1, 0xff, 6) && !copy[7]) {
+			copy[EDID_LENGTH - 1] += copy[0];
+			copy[0] = 0;
+		}
 		mutex_lock(&mn_bridge->mutex);
 		kfree(mn_bridge->hdmi_edid);
 		mn_bridge->hdmi_edid = copy;
