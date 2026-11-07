@@ -2557,8 +2557,6 @@ static int cik_common_early_init(struct amdgpu_ip_block *ip_block)
 		case CHIP_GLADIUS:
 			adev->cg_flags =
 				AMD_CG_SUPPORT_GFX_MGCG |
-				AMD_CG_SUPPORT_GFX_CGCG |
-				AMD_CG_SUPPORT_GFX_CGLS |
 				AMD_CG_SUPPORT_GFX_CGTS |
 				AMD_CG_SUPPORT_SDMA_MGCG |
 				AMD_CG_SUPPORT_VCE_MGCG |
