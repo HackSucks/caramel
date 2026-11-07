@@ -1128,6 +1128,16 @@ static void ps4_bridge_events_start(struct device *dev,
 		DRM_ERROR("ps4_bridge: failed to enable hdmi events\n");
 }
 
+static bool ps4_bridge_has_usable_mode(struct drm_connector *connector)
+{
+	struct drm_display_mode *mode;
+
+	list_for_each_entry(mode, &connector->probed_modes, head)
+		if (ps4_bridge_mode_valid(connector, mode) == MODE_OK)
+			return true;
+	return false;
+}
+
 int ps4_bridge_get_modes(struct drm_connector *connector)
 {
 	struct drm_device *dev = connector->dev;
@@ -1236,7 +1246,10 @@ edid_ready:
 		DRM_DEBUG_KMS("ps4_bridge_get_modes: EDID ok, %d modes, extensions=%u\n",
 			      count, raw_edid ? raw_edid->extensions : 0);
 		drm_edid_free(drm_edid);
-		return count;
+		if (ps4_bridge_has_usable_mode(connector))
+			return count;
+		DRM_DEBUG_KMS("ps4_bridge_get_modes: no usable EDID mode, using fallback modes\n");
+		goto fallback_modes;
 	}
 
 	DRM_DEBUG_KMS("ps4_bridge_get_modes: no EDID, using fallback modes\n");
