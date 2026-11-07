@@ -760,6 +760,7 @@ enum {
 	FLAG_PENDING_SECURITY,
 	FLAG_HOLD_HCI_CONN,
 	FLAG_DEL,
+	FLAG_PENDING_CLASSIC_ENCRYPTION,
 };
 
 /* Lock nesting levels for L2CAP channels. We need these because lockdep
