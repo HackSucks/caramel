@@ -689,7 +689,18 @@ static inline void kalCfg80211ScanDone(struct cfg80211_scan_request *request,
 
 /* string operation */
 #define kalStrCpy(dest, src)                        strcpy(dest, src)
-#define kalStrnCpy(dest, src, n)                    strncpy(dest, src, n)
+static inline char *kalStrncpyCompat(char *dest, const char *src, size_t n)
+{
+	size_t i;
+
+	for (i = 0; i < n && src[i]; i++)
+		dest[i] = src[i];
+	for (; i < n; i++)
+		dest[i] = '\0';
+	return dest;
+}
+
+#define kalStrnCpy(dest, src, n)                    kalStrncpyCompat(dest, src, n)
 #define kalStrCmp(ct, cs)                           strcmp(ct, cs)
 #define kalStrnCmp(ct, cs, n)                       strncmp(ct, cs, n)
 #define kalStrChr(s, c)                             strchr(s, c)
