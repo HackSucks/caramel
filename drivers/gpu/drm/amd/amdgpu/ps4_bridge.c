@@ -556,7 +556,7 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 	cq_writereg(&mn_bridge->cq, 0x7402, 0x1c);
 	cq_writereg(&mn_bridge->cq, 0x6020, 0x04);
 	cq_writereg(&mn_bridge->cq, TSYSCTRL, TSYSCTRL_HDMI);
-	cq_writereg(&mn_bridge->cq, 0x10c7, 0x38);
+	cq_writereg(&mn_bridge->cq, 0x10c7, 0x30);
 	cq_writereg(&mn_bridge->cq, 0x1e02, 0x88);
 	cq_writereg(&mn_bridge->cq, 0x1e00, 0x66);
 	cq_writereg(&mn_bridge->cq, 0x100c, 0x01);
@@ -573,11 +573,12 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 	cq_writereg(&mn_bridge->cq, 0x7073, 0x00);
 	cq_writereg(&mn_bridge->cq, 0x7074, 0x00);
 	cq_writereg(&mn_bridge->cq, 0x7075, 0x00);
-	cq_writereg(&mn_bridge->cq, 0x70c4, 0x0a);
-	cq_writereg(&mn_bridge->cq, 0x70c5, 0x0a);
+	cq_writereg(&mn_bridge->cq, CSCMOD, 0xdc);
+	cq_writereg(&mn_bridge->cq, 0x70c4, 0x08);
+	cq_writereg(&mn_bridge->cq, 0x70c5, 0x08);
 	cq_writereg(&mn_bridge->cq, 0x70c2, 0x00);
 	cq_writereg(&mn_bridge->cq, 0x70fe, 0x12);
-	cq_writereg(&mn_bridge->cq, 0x70c3, 0x10);
+	cq_writereg(&mn_bridge->cq, 0x70c3, 0x00);
 
 	if (pdev->device == PCI_DEVICE_ID_CUH_12XX) {
 		cq_writereg(&mn_bridge->cq, 0x10c5, 0x03);
@@ -587,7 +588,7 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 
 	cq_writereg(&mn_bridge->cq, 0x10f6, 0xff);
 	cq_writereg(&mn_bridge->cq, 0x7202, 0x20);
-	cq_writereg(&mn_bridge->cq, 0x7203, 0x60);
+	cq_writereg(&mn_bridge->cq, 0x7203, 0x70);
 	cq_writereg(&mn_bridge->cq, 0x7011, 0xd5);
 
 	cq_wait_set(&mn_bridge->cq, 0x10f6, 0x80);
