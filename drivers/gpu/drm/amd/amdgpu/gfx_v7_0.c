@@ -1574,6 +1574,15 @@ static int gfx_v7_0_init_microcode(struct amdgpu_device *adev)
 
 	cp_name = chip_name;
 	if (adev->asic_type == CHIP_GLADIUS) {
+		u32 mode = RREG32(0x203e);
+
+		if (!(mode & 0x10)) {
+			WREG32(0x203e, (mode & 0xffffffe4) | 0x10);
+			WREG32(0x341b, RREG32(0x341b) & ~1);
+			WREG32(0x361b, RREG32(0x361b) & ~1);
+			dev_info(adev->dev, "Gladius base mode 0x%08x, switched to pro mode\n",
+				 mode);
+		}
 		cp_name = (RREG32(0x203e) & 1) ? "gladius_a" : "gladius_b";
 		dev_info(adev->dev, "Gladius cp microcode %s (0x203e 0x%08x)\n",
 			 cp_name, RREG32(0x203e));
