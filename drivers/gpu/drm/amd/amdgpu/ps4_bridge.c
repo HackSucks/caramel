@@ -978,7 +978,7 @@ static int ps4_bridge_edid_fetch(struct ps4_bridge *mn_bridge, u8 seq, u8 *out)
 small_reads:
 	for (i = 0; i < 2 * EDID_LENGTH / 8; i++) {
 		cq_init(q, 4);
-		cq_read(q, i ? EDIDFIFO1 : EDIDFIFO0, 8);
+		cq_read(q, EDIDFIFO0 + i * 8, 8);
 		ret = cq_exec(q);
 		if (ret < 0)
 			return ret;
