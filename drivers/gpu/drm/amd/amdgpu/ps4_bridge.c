@@ -1004,6 +1004,11 @@ static int ps4_bridge_read_edid_block_icc(void *data, u8 *buf,
 		return ret;
 
 	memcpy(buf, seg + (block % 2) * EDID_LENGTH, len);
+	if (block == 0 && len == EDID_LENGTH && buf[0] &&
+	    !memcmp(buf + 1, "\xff\xff\xff\xff\xff\xff\x00", 7)) {
+		buf[EDID_LENGTH - 1] += buf[0];
+		buf[0] = 0;
+	}
 	return 0;
 }
 
