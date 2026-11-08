@@ -7,7 +7,7 @@ before this every southbridge had its own kernel and baikal was never really fix
 ## What works
 
 - hdmi output, the edid from your tv, hotplug
-- vulkan (radv) and opengl (radeonsi), gpu compute. not on pro yet, see known issues
+- vulkan (radv) and opengl (radeonsi), gpu compute, also on pro with stock mesa
 - hardware video decode and encode (uvd and vce), so hardware transcoding works. not on pro yet
 - usb, sata hdd and ssd, blu-ray drive
 - ethernet. baikal with the new mts driver at full gigabit, aeolia and belize with sky2
@@ -20,7 +20,7 @@ tested on baikal slim, baikal pro, belize slim and belize pro. aeolia runs the s
 
 ## Known issues
 
-- vulkan on pro (gladius) hangs the gpu (ring gfx timeout in vkmark), the desktop and opengl work. cause not found yet
+- on pro the gpu microcode skips predication, so conditional rendering always draws
 - no hardware video on pro yet, uvd and vce are off for gladius
 - 4k only up to 30 hz. no 4k60, hdr or deep color yet
 - no suspend or hibernate
