@@ -4,7 +4,9 @@
 #include <linux/miscdevice.h>
 #include <linux/pci.h>
 #include <linux/rtc.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/unaligned.h>
 
 #include "ps4sb.h"
 
@@ -13,6 +15,11 @@
 #define RTC_STATUS_BATTERY_OK	BIT(8)
 #define RTC_STATUS_CLOCK_OK	BIT(9)
 
+#define RTC_NVS_REPLY_SIZE	0x302
+#define RTC_NVS_KEY_A		(2 + 0x6c)
+#define RTC_NVS_KEY_B		(2 + 0x1a8)
+#define RTC_VALID_AFTER		1577836800LL
+
 #define RTC_IOC_GET_TICKS	_IOR('R', 1, __u32)
 #define RTC_IOC_GET_TIME	_IOR('R', 2, __u64)
 
@@ -20,6 +27,7 @@ struct ps4sb_rtc {
 	struct ps4sb_dev *sc;
 	void __iomem *regs;
 	time64_t offset;
+	bool valid;
 };
 
 static struct ps4sb_rtc ps4sb_rtc;
@@ -65,6 +73,9 @@ static int ps4sb_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	u32 ticks;
 	int ret;
 
+	if (!ps4sb_rtc.valid)
+		return -EINVAL;
+
 	ret = rtc_read_ticks(&ps4sb_rtc, &ticks);
 	if (ret)
 		return ret;
@@ -84,6 +95,7 @@ static int ps4sb_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	ps4sb_rtc.offset = rtc_tm_to_time64(tm) -
 			   (ps4sb_rtc.sc->family->rtc_epoch + ticks);
+	ps4sb_rtc.valid = true;
 	return 0;
 }
 
@@ -141,11 +153,43 @@ static struct miscdevice rtc_miscdev = {
 	.fops	= &rtc_dev_fops,
 };
 
+static s64 rtc_nvs_value(const u8 *reply, unsigned int pos)
+{
+	s64 value = get_unaligned_le64(reply + pos);
+
+	return value == S64_MAX ? 0 : value;
+}
+
+static void rtc_load_nvs_offset(struct ps4sb_rtc *rtc, bool hw_ok)
+{
+	static const u8 request[] = { 0x00, 0x04, 0x00, 0x10, 0x00, 0x03 };
+	u32 ticks;
+	u8 *reply;
+	int ret;
+
+	reply = kzalloc(RTC_NVS_REPLY_SIZE, GFP_KERNEL);
+	if (!reply)
+		return;
+
+	ret = ps4sb_icc_cmd(3, 1, request, sizeof(request), reply,
+			    RTC_NVS_REPLY_SIZE);
+	if (ret >= RTC_NVS_KEY_B + 8 && !rtc_read_ticks(rtc, &ticks)) {
+		rtc->offset = rtc_nvs_value(reply, RTC_NVS_KEY_A) +
+			      rtc_nvs_value(reply, RTC_NVS_KEY_B);
+		rtc->valid = hw_ok &&
+			     rtc_ticks_to_time(rtc, ticks) >= RTC_VALID_AFTER;
+		dev_info(&rtc->sc->pdev->dev, "rtc: nvs offset %lld, %s\n",
+			 rtc->offset, rtc->valid ? "valid" : "not valid");
+	}
+	kfree(reply);
+}
+
 int ps4sb_rtc_init(struct ps4sb_dev *sc)
 {
 	const struct ps4sb_family *f = sc->family;
 	struct device *dev = &sc->pdev->dev;
 	struct rtc_device *rtc_dev;
+	bool hw_ok = true;
 	int ret;
 
 	if (ps4sb_rtc.sc)
@@ -154,10 +198,14 @@ int ps4sb_rtc_init(struct ps4sb_dev *sc)
 	if (f->rtc_status) {
 		u32 status = ioread32(ps4sb_bar(sc, f->rtc_bar) + f->rtc_status);
 
-		if (!(status & RTC_STATUS_BATTERY_OK))
+		if (!(status & RTC_STATUS_BATTERY_OK)) {
 			dev_warn(dev, "rtc: battery failure indication\n");
-		if (!(status & RTC_STATUS_CLOCK_OK))
+			hw_ok = false;
+		}
+		if (!(status & RTC_STATUS_CLOCK_OK)) {
 			dev_warn(dev, "rtc: clock failure indication\n");
+			hw_ok = false;
+		}
 	}
 
 	rtc_dev = devm_rtc_allocate_device(dev);
@@ -166,6 +214,7 @@ int ps4sb_rtc_init(struct ps4sb_dev *sc)
 
 	ps4sb_rtc.sc = sc;
 	ps4sb_rtc.regs = ps4sb_bar(sc, f->rtc_bar) + f->rtc_reg;
+	rtc_load_nvs_offset(&ps4sb_rtc, hw_ok);
 	rtc_dev->ops = &ps4sb_rtc_ops;
 
 	ret = devm_rtc_register_device(rtc_dev);
