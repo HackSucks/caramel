@@ -9,14 +9,16 @@ before this every southbridge had its own kernel and baikal was never really fix
 - hdmi output, the edid from your tv, hotplug
 - vulkan (radv) and opengl (radeonsi), gpu compute, also on pro with stock mesa
 - hardware video decode and encode (uvd and vce), so hardware transcoding works. not on pro yet
-- usb, sata hdd and ssd, blu-ray drive
+- usb (usb 3 at 5 gbit), sata hdd and ssd, blu-ray drive
 - ethernet. baikal with the new mts driver at full gigabit, aeolia and belize with sky2
 - wifi and bluetooth, ds4 reconnects with one press
 - cpu frequency scaling, fan, power led, power button, reboot and power off
 - spi flash read on baikal
+- samu hardware crypto (aes xts for the internal hdd) and the hardware random number generator
+- real time clock, the time comes from the console itself, no network needed
 - tsc calibrated against the southbridge timer, high res timers on baikal
 
-tested on baikal slim, baikal pro, belize slim and belize pro. aeolia runs the same code but nobody tested this release on aeolia yet.
+tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pro.
 
 ## Known issues
 
@@ -26,7 +28,9 @@ tested on baikal slim, baikal pro, belize slim and belize pro. aeolia runs the s
 - no suspend or hibernate
 - the gpu clock stays at its top speed, it does not clock down when idle
 - aeolia ethernet can keep one cpu core busy, fix is in progress
-- belize rtc read fails at boot, the loader sets the time instead
+- consoles with a dead rtc battery get no time at boot, ntp sets it
+- usb 3 drives on baikal run without uas for now, will be fixed
+- one belize pro with a 4k tv shows a green picture and no 4k modes, will be fixed
 - dp link training errors in dmesg are harmless, display works
 
 ## Install
