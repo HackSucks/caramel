@@ -464,10 +464,10 @@ static int baikal_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 		goto free_bars;
 	if (ps4sb_uart_init(sc) < 0)
 		sc_err("uart not registered\n");
-	if (ps4sb_rtc_init(sc) < 0)
-		sc_err("rtc not registered\n");
 	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_uart;
+	if (ps4sb_rtc_init(sc) < 0)
+		sc_err("rtc not registered\n");
 
 	WRITE_ONCE(ps4sb_initialized, true);
 	return 0;
