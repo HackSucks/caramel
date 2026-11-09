@@ -26,7 +26,6 @@ tested on baikal slim, baikal pro, belize slim and belize pro. aeolia runs the s
 - no suspend or hibernate
 - the gpu clock stays at its top speed, it does not clock down when idle
 - aeolia ethernet can keep one cpu core busy, fix is in progress
-- samu ccp and trng are off for now, they break boot on belize slim and aeolia
 - belize rtc read fails at boot, the loader sets the time instead
 - dp link training errors in dmesg are harmless, display works
 
