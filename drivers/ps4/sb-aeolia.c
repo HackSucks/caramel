@@ -586,7 +586,7 @@ static const struct ps4sb_family aeolia_family = {
 	.rtc_bar	= 2,
 	.rtc_reg	= 0x130,
 	.rtc_byte_regs	= true,
-	.rtc_epoch	= -1431543102LL,
+	.rtc_epoch	= 1325376000LL,
 };
 
 static int aeolia_probe(struct pci_dev *dev, const struct pci_device_id *id) {
@@ -629,10 +629,10 @@ static int aeolia_probe(struct pci_dev *dev, const struct pci_device_id *id) {
 
 	if ((ret = aeolia_glue_init(sc)) < 0)
 		goto free_bars;
-	if (ps4sb_rtc_init(sc) < 0)
-		sc_err("rtc not registered\n");
 	if ((ret = ps4sb_icc_init(sc)) < 0)
 		goto remove_glue;
+	if (ps4sb_rtc_init(sc) < 0)
+		sc_err("rtc not registered\n");
 
 	WRITE_ONCE(ps4sb_initialized, true);
 	return 0;
