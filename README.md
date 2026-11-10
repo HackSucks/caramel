@@ -23,7 +23,7 @@ tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pr
 ## Known issues
 
 - on pro the gpu microcode skips predication, so conditional rendering always draws
-- 4k only up to 30 hz. no 4k60, hdr or deep color yet
+- 4k (30 and 60 hz) only on pro. no hdr or deep color yet
 - no suspend or hibernate
 - the gpu clock stays at its top speed, it does not clock down when idle
 - aeolia ethernet can keep one cpu core busy, fix is in progress
