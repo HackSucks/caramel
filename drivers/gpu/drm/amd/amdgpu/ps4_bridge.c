@@ -470,8 +470,10 @@ static void ps4_bridge_retrain_dp(struct ps4_bridge *mn_bridge)
 	if (ret)
 		return;
 
-	DRM_DEBUG_KMS("ps4_bridge: retraining DP link after bridge enable\n");
-	amdgpu_atombios_dp_link_train(encoder, connector);
+	if (to_pci_dev(connector->dev->dev)->device != PCI_DEVICE_ID_CUH_7XXX) {
+		DRM_DEBUG_KMS("ps4_bridge: retraining DP link after bridge enable\n");
+		amdgpu_atombios_dp_link_train(encoder, connector);
+	}
 }
 
 void ps4_bridge_mode_set(struct drm_bridge *bridge,
@@ -573,7 +575,9 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 	mutex_lock(&mn_bridge->mutex);
 	cq_init(&mn_bridge->cq, 4);
 	cq_mask(&mn_bridge->cq, 0x6005, 0x01, 0x01);
+	cq_delay(&mn_bridge->cq, 2);
 	cq_writereg(&mn_bridge->cq, 0x6a03, 0x47);
+	cq_delay(&mn_bridge->cq, 10);
 
 	cq_wait_set(&mn_bridge->cq, 0x60f8, 0xff);
 	cq_wait_set(&mn_bridge->cq, 0x60f9, 0x01);
@@ -582,7 +586,9 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 
 	cq_mask(&mn_bridge->cq, 0x1e00, 0x00, 0x21);
 	cq_mask(&mn_bridge->cq, 0x1e02, 0x00, 0x70);
+	cq_delay(&mn_bridge->cq, 300);
 	cq_writereg(&mn_bridge->cq, 0x6020, 0x00);
+	cq_delay(&mn_bridge->cq, 50);
 
 	cq_writereg(&mn_bridge->cq, 0x7402, 0x1c);
 	cq_writereg(&mn_bridge->cq, 0x6020, 0x04);
@@ -641,6 +647,7 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 	cq_mask(&mn_bridge->cq, 0x7228, 0x00, 0xFF);
 	cq_writereg(&mn_bridge->cq, 0x7204, 0x40);
 	cq_wait_clear(&mn_bridge->cq, 0x7204, 0x40);
+	cq_delay(&mn_bridge->cq, 10);
 	if (scramble)
 		cq_writereg(&mn_bridge->cq, 0x10c7, 0x31);
 	cq_writereg(&mn_bridge->cq, 0x7a8b, 0x05);
@@ -656,8 +663,7 @@ static int ps4_bridge_enable_mn864729_video(struct ps4_bridge *mn_bridge,
 	cq_mask(&mn_bridge->cq, 0x1034, 0x02, 0x02);
 	cq_mask(&mn_bridge->cq, 0x1e00, 0x01, 0x01);
 	cq_writereg(&mn_bridge->cq, VMUTECNT, VMUTECNT_LINEWIDTH_90);
-	if (scramble)
-		cq_delay(&mn_bridge->cq, 700);
+	cq_delay(&mn_bridge->cq, scramble ? 700 : 500);
 	cq_writereg(&mn_bridge->cq, HDCPEN, 0x00);
 	ret = cq_exec(&mn_bridge->cq);
 	if (ret < 0)
