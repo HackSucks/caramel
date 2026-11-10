@@ -27,6 +27,7 @@
 
 #include "amdgpu.h"
 #include "amdgpu_uvd.h"
+#include "uvd_gladius.h"
 #include "vid.h"
 #include "uvd/uvd_5_0_d.h"
 #include "uvd/uvd_5_0_sh_mask.h"
@@ -39,6 +40,7 @@
 #include "ivsrcid/ivsrcid_vislands30.h"
 
 static bool uvd_v5_0_liverpool(struct amdgpu_device *adev);
+static bool uvd_v5_0_native(struct amdgpu_device *adev);
 static int uvd_v5_0_liverpool_stop(struct amdgpu_device *adev);
 static void uvd_v5_0_set_ring_funcs(struct amdgpu_device *adev);
 static void uvd_v5_0_set_irq_funcs(struct amdgpu_device *adev);
@@ -87,6 +89,8 @@ static void uvd_v5_0_ring_set_wptr(struct amdgpu_ring *ring)
 {
 	struct amdgpu_device *adev = ring->adev;
 
+	if (adev->asic_type == CHIP_GLADIUS)
+		amdgpu_hdp_flush(adev, NULL);
 	WREG32(mmUVD_RBC_RB_WPTR, lower_32_bits(ring->wptr));
 }
 
@@ -135,6 +139,8 @@ static int uvd_v5_0_sw_fini(struct amdgpu_ip_block *ip_block)
 	int r;
 	struct amdgpu_device *adev = ip_block->adev;
 
+	if (adev->uvd.native_stop_failed)
+		return -EBUSY;
 	r = amdgpu_uvd_suspend(adev);
 	if (r)
 		return r;
@@ -156,6 +162,17 @@ static int uvd_v5_0_hw_init(struct amdgpu_ip_block *ip_block)
 	uint32_t tmp;
 	int r;
 
+	if (adev->asic_type == CHIP_GLADIUS) {
+		r = uvd_gladius_start(adev);
+		if (r)
+			return r;
+		r = amdgpu_ring_test_helper(ring);
+		if (r)
+			uvd_gladius_stop(adev);
+		else
+			dev_info(adev->dev, "Gladius UVD firmware initialized\n");
+		return r;
+	}
 	amdgpu_asic_set_uvd_clocks(adev, 10000, 10000);
 	uvd_v5_0_set_clockgating_state(ip_block, AMD_CG_STATE_UNGATE);
 	uvd_v5_0_enable_mgcg(adev, true);
@@ -209,9 +226,18 @@ done:
 static int uvd_v5_0_hw_fini(struct amdgpu_ip_block *ip_block)
 {
 	struct amdgpu_device *adev = ip_block->adev;
+	int r;
 
 	cancel_delayed_work_sync(&adev->uvd.idle_work);
 
+	if (adev->asic_type == CHIP_GLADIUS) {
+		r = amdgpu_fence_wait_empty(&adev->uvd.inst[0].ring);
+		if (r) {
+			adev->uvd.native_stop_failed = true;
+			return r;
+		}
+		return uvd_gladius_stop(adev);
+	}
 	if (uvd_v5_0_liverpool(adev))
 		return uvd_v5_0_liverpool_stop(adev);
 
@@ -285,6 +311,11 @@ static int uvd_v5_0_resume(struct amdgpu_ip_block *ip_block)
 static bool uvd_v5_0_liverpool(struct amdgpu_device *adev)
 {
 	return amdgpu_vce_is_native(adev);
+}
+
+static bool uvd_v5_0_native(struct amdgpu_device *adev)
+{
+	return uvd_v5_0_liverpool(adev) || adev->asic_type == CHIP_GLADIUS;
 }
 
 static int uvd_v5_0_liverpool_start(struct amdgpu_device *adev)
@@ -441,6 +472,8 @@ static int uvd_v5_0_start(struct amdgpu_device *adev)
 	uint32_t mp_swap_cntl;
 	int i, j, r;
 
+	if (adev->asic_type == CHIP_GLADIUS)
+		return uvd_gladius_start(adev);
 	if (uvd_v5_0_liverpool(adev))
 		return uvd_v5_0_liverpool_start(adev);
 
@@ -579,6 +612,10 @@ static int uvd_v5_0_start(struct amdgpu_device *adev)
  */
 static void uvd_v5_0_stop(struct amdgpu_device *adev)
 {
+	if (adev->asic_type == CHIP_GLADIUS) {
+		uvd_gladius_stop(adev);
+		return;
+	}
 	if (uvd_v5_0_liverpool(adev)) {
 		if (uvd_v5_0_liverpool_stop(adev))
 			dev_err(adev->dev, "UVD stop did not drain\n");
@@ -618,7 +655,7 @@ static void uvd_v5_0_stop(struct amdgpu_device *adev)
 static void uvd_v5_0_ring_emit_fence(struct amdgpu_ring *ring, u64 addr, u64 seq,
 				     unsigned flags)
 {
-	u32 source = uvd_v5_0_liverpool(ring->adev) ? 0x80000000 : 0;
+	u32 source = uvd_v5_0_native(ring->adev) ? 0x80000000 : 0;
 
 	WARN_ON(flags & AMDGPU_FENCE_FLAG_64BIT);
 
@@ -750,7 +787,7 @@ static int uvd_v5_0_set_interrupt_state(struct amdgpu_device *adev,
 					unsigned type,
 					enum amdgpu_interrupt_state state)
 {
-	if (uvd_v5_0_liverpool(adev)) {
+	if (uvd_v5_0_native(adev)) {
 		u32 value = RREG32(mmUVD_MASTINT_EN) & ~4u;
 
 		if (state == AMDGPU_IRQ_STATE_ENABLE)
@@ -782,7 +819,7 @@ static void uvd_v5_0_enable_clock_gating(struct amdgpu_device *adev, bool enable
 		     UVD_SUVD_CGC_GATE__SCM_MASK |
 		     UVD_SUVD_CGC_GATE__SDB_MASK;
 
-	if (uvd_v5_0_liverpool(adev))
+	if (uvd_v5_0_native(adev))
 		return;
 
 	if (enable) {
@@ -938,7 +975,7 @@ static int uvd_v5_0_set_clockgating_state(struct amdgpu_ip_block *ip_block,
 	struct amdgpu_device *adev = ip_block->adev;
 	bool enable = (state == AMD_CG_STATE_GATE);
 
-	if (uvd_v5_0_liverpool(adev))
+	if (uvd_v5_0_native(adev))
 		return 0;
 
 	if (enable) {
@@ -970,12 +1007,12 @@ static int uvd_v5_0_set_powergating_state(struct amdgpu_ip_block *ip_block,
 	struct amdgpu_device *adev = ip_block->adev;
 	int ret = 0;
 
-	if (uvd_v5_0_liverpool(adev)) {
+	if (uvd_v5_0_native(adev)) {
 		if (state == AMD_PG_STATE_GATE)
 			return 0;
 		if ((RREG32(mmUVD_VCPU_CNTL) & 0x200) && !(RREG32(mmUVD_SOFT_RESET) & 8))
 			return 0;
-		return uvd_v5_0_liverpool_start(adev);
+		return uvd_v5_0_start(adev);
 	}
 
 	if (state == AMD_PG_STATE_GATE) {
@@ -995,7 +1032,7 @@ static void uvd_v5_0_get_clockgating_state(struct amdgpu_ip_block *ip_block, u64
 	struct amdgpu_device *adev = ip_block->adev;
 	int data;
 
-	if (uvd_v5_0_liverpool(adev))
+	if (uvd_v5_0_native(adev))
 		return;
 
 	mutex_lock(&adev->pm.mutex);
