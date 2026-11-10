@@ -59,6 +59,7 @@ struct amdgpu_uvd {
 	uint8_t			num_uvd_inst;
 	bool			address_64_bit;
 	bool			use_ctx_buf;
+	bool			native_stop_failed;
 	struct amdgpu_uvd_inst	inst[AMDGPU_MAX_UVD_INSTANCES];
 	struct drm_file		*filp[AMDGPU_MAX_UVD_HANDLES];
 	atomic_t		handles[AMDGPU_MAX_UVD_HANDLES];

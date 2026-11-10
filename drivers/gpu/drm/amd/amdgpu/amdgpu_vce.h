@@ -61,6 +61,7 @@ struct amdgpu_vce {
 };
 
 bool amdgpu_vce_is_native(struct amdgpu_device *adev);
+bool amdgpu_vce_is_gladius(struct amdgpu_device *adev);
 int amdgpu_vce_early_init(struct amdgpu_device *adev);
 int amdgpu_vce_sw_init(struct amdgpu_device *adev, unsigned long size);
 int amdgpu_vce_sw_fini(struct amdgpu_device *adev);

@@ -29,6 +29,7 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/crc32.h>
 #include <linux/module.h>
 
 #include <drm/drm.h>
@@ -115,6 +116,7 @@ MODULE_FIRMWARE(FIRMWARE_PITCAIRN);
 MODULE_FIRMWARE(FIRMWARE_OLAND);
 #endif
 #ifdef CONFIG_DRM_AMDGPU_CIK
+MODULE_FIRMWARE("amdgpu/gladius_uvd.bin");
 MODULE_FIRMWARE(FIRMWARE_BONAIRE);
 MODULE_FIRMWARE(FIRMWARE_KABINI);
 MODULE_FIRMWARE(FIRMWARE_KAVERI);
@@ -214,6 +216,9 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 			return -ENODEV;
 		fw_name = "amdgpu/liverpool_refresh_uvd.bin";
 		break;
+	case CHIP_GLADIUS:
+		fw_name = "amdgpu/gladius_uvd.bin";
+		break;
 	case CHIP_BONAIRE:
 		fw_name = FIRMWARE_BONAIRE;
 		break;
@@ -279,6 +284,15 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 	adev->uvd.max_handles = AMDGPU_DEFAULT_UVD_HANDLES;
 
 	hdr = (const struct common_firmware_header *)adev->uvd.fw->data;
+	if (adev->asic_type == CHIP_GLADIUS &&
+	    (adev->uvd.fw->size != 348764 ||
+	     le32_to_cpu(hdr->ucode_size_bytes) != 348508 ||
+	     le32_to_cpu(hdr->ucode_array_offset_bytes) != 256 ||
+	     le32_to_cpu(hdr->ucode_version) != 0x01009832 ||
+	     (crc32_le(~0u, adev->uvd.fw->data + 256, 348508) ^ ~0u) != 0xbb80a3c6)) {
+		amdgpu_ucode_release(&adev->uvd.fw);
+		return -EINVAL;
+	}
 	family_id = le32_to_cpu(hdr->ucode_version) & 0xff;
 
 	if (adev->asic_type < CHIP_VEGA20) {
@@ -325,6 +339,8 @@ int amdgpu_uvd_sw_init(struct amdgpu_device *adev)
 		  +  AMDGPU_UVD_SESSION_SIZE * adev->uvd.max_handles;
 	if (adev->firmware.load_type != AMDGPU_FW_LOAD_PSP)
 		bo_size += AMDGPU_GPU_PAGE_ALIGN(le32_to_cpu(hdr->ucode_size_bytes) + 8);
+	if (adev->asic_type == CHIP_GLADIUS)
+		bo_size = max_t(unsigned int, bo_size, 0x1e0000);
 
 	/* UVD 5.0 and newer HW can use 64 bit addressing. */
 	adev->uvd.address_64_bit =

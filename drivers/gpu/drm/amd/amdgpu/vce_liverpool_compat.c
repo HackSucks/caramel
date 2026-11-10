@@ -1,10 +1,12 @@
 #include <linux/dma-fence.h>
 #include <linux/delay.h>
+#include <linux/crc32.h>
 #include <linux/kref.h>
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
+#include <asm/cacheflush.h>
 
 #include "amdgpu.h"
 #include "amdgpu_cs.h"
@@ -12,6 +14,7 @@
 #include "vce_liverpool.h"
 #include "vce_liverpool_vectors.h"
 #include "vce_liverpool_sps.h"
+#include "vce_gladius.h"
 
 #define VCE_NATIVE_POOL_SIZE 0x6a4000u
 
@@ -25,18 +28,24 @@ struct vce_liverpool_session {
 	u32 crop[4];
 	u32 record;
 	u32 metadata, bitstream, header;
+	u32 pool_size, feedback, direct_bitstream;
+	u32 input_pitch, input_rows, input_uv;
+	u32 encoded_qp_i, encoded_qp_p, encoded_fps_num, encoded_fps_den;
 	struct amdgpu_bo *bo;
+	struct amdgpu_bo *input_bo;
 	struct dma_fence *tail;
 	u64 gpu;
+	u64 input_gpu;
 	void *cpu;
-	bool started, failed;
+	void *input_cpu;
+	bool started, failed, direct_input;
 };
 
 struct vce_liverpool_job {
 	struct dma_fence fence;
 	spinlock_t lock;
 	struct dma_fence_cb callback;
-	struct work_struct work, release;
+	struct work_struct work, release, cleanup;
 	struct dma_fence *hardware;
 	struct vce_liverpool_session *session;
 	struct amdgpu_device *adev;
@@ -48,8 +57,32 @@ struct vce_liverpool_job {
 
 static atomic_t vce_liverpool_next_handle = ATOMIC_INIT(0);
 static bool vce_liverpool_trace;
+static bool vce_liverpool_guard;
+static bool vce_liverpool_direct = true;
 module_param_named(vce_native_trace, vce_liverpool_trace, bool, 0600);
 MODULE_PARM_DESC(vce_native_trace, "Trace native VCE command submissions");
+module_param_named(vce_native_guard, vce_liverpool_guard, bool, 0600);
+MODULE_PARM_DESC(vce_native_guard, "Reserve a 64 MiB Pro private allocation for diagnostics");
+module_param_named(vce_native_direct, vce_liverpool_direct, bool, 0600);
+MODULE_PARM_DESC(vce_native_direct, "Use the original GTT input for native Pro encoding");
+
+static u32 vce_liverpool_gladius_crc(const void *cpu, u64 luma, u64 chroma,
+		u32 pitch, u32 rows)
+{
+	u8 data[256];
+	u64 addresses[] = { luma, chroma };
+	u32 crc = 0, plane, offset, bytes, chunk;
+
+	for (plane = 0; plane < 2; plane++) {
+		bytes = pitch * rows >> plane;
+		for (offset = 0; offset < bytes; offset += chunk) {
+			chunk = min_t(u32, bytes - offset, sizeof(data));
+			memcpy_fromio(data, cpu + addresses[plane] + offset, chunk);
+			crc = crc32_le(crc, data, chunk);
+		}
+	}
+	return crc;
+}
 
 static void vce_liverpool_session_release(struct kref *ref)
 {
@@ -60,6 +93,8 @@ static void vce_liverpool_session_release(struct kref *ref)
 		return;
 	if (session->bo)
 		amdgpu_bo_free_kernel(&session->bo, &session->gpu, &session->cpu);
+	if (session->input_bo)
+		amdgpu_bo_free_kernel(&session->input_bo, &session->input_gpu, &session->input_cpu);
 	dma_fence_put(session->tail);
 	kfree(session);
 }
@@ -69,23 +104,44 @@ static const char *vce_liverpool_fence_name(struct dma_fence *fence)
 	return "vce-native-output";
 }
 
+static bool vce_liverpool_release_resources(struct vce_liverpool_job *job)
+{
+	if (job->input_pinned) {
+		if (amdgpu_bo_reserve(job->input_bo, false))
+			return false;
+		amdgpu_bo_unpin(job->input_bo);
+		amdgpu_bo_unreserve(job->input_bo);
+		job->input_pinned = false;
+	}
+	amdgpu_bo_unref(&job->input_bo);
+	amdgpu_bo_unref(&job->output_bo);
+	amdgpu_bo_unref(&job->feedback_bo);
+	if (job->session) {
+		struct vce_liverpool_session *session = job->session;
+
+		job->session = NULL;
+		kref_put(&session->ref, vce_liverpool_session_release);
+	}
+	return true;
+}
+
+static void vce_liverpool_cleanup_job(struct work_struct *work)
+{
+	struct vce_liverpool_job *job =
+		container_of(work, struct vce_liverpool_job, cleanup);
+
+	if (vce_liverpool_release_resources(job))
+		dma_fence_put(&job->fence);
+}
+
 static void vce_liverpool_release_job(struct work_struct *work)
 {
 	struct vce_liverpool_job *job =
 		container_of(work, struct vce_liverpool_job, release);
 
+	if (!vce_liverpool_release_resources(job))
+		return;
 	dma_fence_put(job->hardware);
-	if (job->input_pinned) {
-		if (amdgpu_bo_reserve(job->input_bo, false))
-			return;
-		amdgpu_bo_unpin(job->input_bo);
-		amdgpu_bo_unreserve(job->input_bo);
-	}
-	amdgpu_bo_unref(&job->input_bo);
-	amdgpu_bo_unref(&job->output_bo);
-	amdgpu_bo_unref(&job->feedback_bo);
-	if (job->session)
-		kref_put(&job->session->ref, vce_liverpool_session_release);
 	kfree(job);
 }
 
@@ -120,12 +176,12 @@ static int vce_liverpool_copy_output(struct vce_liverpool_job *job, u32 start, u
 	u32 first, position, next, nal, copied = 0;
 	int length;
 
-	if (!size || size > VCE_NATIVE_POOL_SIZE || start >= VCE_NATIVE_POOL_SIZE)
+	if (!size || size > session->pool_size || start >= session->pool_size)
 		return -EINVAL;
 	source = kvmalloc(size, GFP_KERNEL);
 	if (!source)
 		return -ENOMEM;
-	first = min(size, VCE_NATIVE_POOL_SIZE - start);
+	first = min(size, session->pool_size - start);
 	memcpy_fromio(source, session->cpu + session->bitstream + start, first);
 	if (first < size)
 		memcpy_fromio(source + first, session->cpu + session->bitstream, size - first);
@@ -185,13 +241,17 @@ static void vce_liverpool_finish(struct work_struct *work)
 		job->retain = true;
 	if (!error && job->encode) {
 		void *metadata = session->cpu + session->metadata;
-		void *record = metadata + 8 + job->record * 512;
+		bool gladius = amdgpu_vce_is_gladius(job->adev);
+		void *record = metadata + 8 + job->record *
+			(gladius ? VCE_GLADIUS_RECORD_SIZE : 512);
 
 		for (i = 0; i < 10000; i++) {
+			if (gladius)
+				amdgpu_hdp_invalidate(job->adev, NULL);
 			producer = readl(metadata + 4);
-			bytes = readl(record + 0x10);
+			bytes = readl(record + (gladius ? 0x14 : 0x10));
 			padding = readl(record + 0x1c);
-			if (producer != job->record && bytes > padding)
+			if ((!gladius || producer < 5) && producer != job->record && bytes > padding)
 				break;
 			usleep_range(100, 150);
 		}
@@ -199,15 +259,21 @@ static void vce_liverpool_finish(struct work_struct *work)
 			error = -ETIMEDOUT;
 			job->retain = true;
 		} else {
-			start = readl(record + 0xc);
+			start = readl(record + (gladius ? 0x10 : 0xc));
 			length = vce_liverpool_copy_output(job, start, bytes - padding);
 			if (length < 0)
 				error = length;
 		}
 		if (i != 10000) {
-			writel(0, record + 0x10);
+			writel(0, record + (gladius ? 0x14 : 0x10));
 			writel((job->record + 1) % 5, metadata);
 		}
+		if (gladius && session->input_cpu && READ_ONCE(vce_liverpool_trace))
+			dev_info(job->adev->dev,
+				"VCE input complete handle=%u record=%u gpu=%llx crc=%08x\n",
+				session->native_handle, job->record, session->input_gpu,
+				vce_liverpool_gladius_crc(session->input_cpu, 0,
+					session->input_uv, session->input_pitch, session->input_rows));
 	}
 	if (error && session) {
 		WRITE_ONCE(session->failed, true);
@@ -221,12 +287,19 @@ static void vce_liverpool_finish(struct work_struct *work)
 		wmb();
 		writel(error ? 0 : 1, job->feedback + 4);
 	}
-	amdgpu_device_flush_hdp(job->adev, NULL);
+	if (amdgpu_vce_is_gladius(job->adev))
+		amdgpu_hdp_flush(job->adev, NULL);
+	else
+		amdgpu_device_flush_hdp(job->adev, NULL);
 	if (error)
 		dma_fence_set_error(&job->fence, error);
 	dma_fence_signal(&job->fence);
-	if (!job->retain)
-		dma_fence_put(&job->fence);
+	if (!job->retain) {
+		if (amdgpu_vce_is_gladius(job->adev))
+			queue_work(system_unbound_wq, &job->cleanup);
+		else
+			dma_fence_put(&job->fence);
+	}
 }
 
 static void vce_liverpool_hardware_done(struct dma_fence *fence, struct dma_fence_cb *callback)
@@ -382,6 +455,23 @@ static int vce_liverpool_allocate_session(struct vce_liverpool_session *session)
 	u32 frame, allocation;
 	int r;
 
+	if (amdgpu_vce_is_gladius(session->adev)) {
+		session->pitch = ALIGN(session->width, 32);
+		frame = ALIGN(session->width, 256) * ALIGN(session->height, 32) * 3 / 2;
+		session->metadata = PAGE_ALIGN(frame * 2);
+		session->bitstream = session->metadata + PAGE_SIZE;
+		session->header = session->bitstream + VCE_GLADIUS_POOL_SIZE;
+		session->feedback = session->header + VCE_GLADIUS_POOL_SIZE;
+		session->direct_bitstream = session->feedback + PAGE_SIZE;
+		session->pool_size = VCE_GLADIUS_POOL_SIZE;
+		allocation = PAGE_ALIGN(session->direct_bitstream + VCE_GLADIUS_POOL_SIZE);
+		if (READ_ONCE(vce_liverpool_guard))
+			allocation = max_t(u32, allocation, SZ_64M);
+		r = amdgpu_bo_create_kernel(session->adev, allocation, PAGE_SIZE,
+			AMDGPU_GEM_DOMAIN_GTT, &session->bo, &session->gpu, &session->cpu);
+		goto allocated;
+	}
+	session->pool_size = VCE_NATIVE_POOL_SIZE;
 	session->pitch = ALIGN(session->width, 64);
 	frame = session->pitch * ALIGN(session->height, 32) * 3 / 2;
 	session->metadata = ALIGN(frame * 2, 256);
@@ -390,6 +480,7 @@ static int vce_liverpool_allocate_session(struct vce_liverpool_session *session)
 	allocation = PAGE_ALIGN(session->header + 4096);
 	r = amdgpu_bo_create_kernel(session->adev, allocation, PAGE_SIZE, AMDGPU_GEM_DOMAIN_VRAM,
 		&session->bo, &session->gpu, &session->cpu);
+allocated:
 	if (r)
 		return r;
 	if (session->gpu >= (1ULL << 40) || allocation > (1ULL << 40) - session->gpu) {
@@ -397,6 +488,152 @@ static int vce_liverpool_allocate_session(struct vce_liverpool_session *session)
 		return -ERANGE;
 	}
 	memset_io(session->cpu, 0, allocation);
+	return 0;
+}
+
+static void vce_liverpool_gladius_config(struct vce_liverpool_session *session,
+		struct vce_gladius_config *config, u32 output_size)
+{
+	*config = (struct vce_gladius_config) {
+		.handle = session->native_handle,
+		.profile = session->profile,
+		.level = session->level,
+		.width = session->width,
+		.height = session->height,
+		.fps_num = session->fps_num,
+		.fps_den = session->fps_den,
+		.qp_i = session->qp_i ?: session->qp_p,
+		.qp_p = session->qp_p ?: session->qp_i,
+		.max_bitstream = min(output_size, session->pool_size),
+		.cpb = session->gpu,
+		.descriptor = session->gpu + session->metadata,
+		.output = session->gpu + session->bitstream,
+		.output1 = session->gpu + session->header,
+		.feedback = session->gpu + session->feedback,
+		.bitstream = session->gpu + session->direct_bitstream,
+	};
+}
+
+static int vce_liverpool_gladius_allocate_input(struct vce_liverpool_session *session,
+		u32 pitch, u32 rows, u32 uv)
+{
+	struct amdgpu_bo_param bp = {
+		.size = PAGE_ALIGN((u64)uv + (u64)pitch * rows / 2),
+		.byte_align = PAGE_SIZE,
+		.domain = AMDGPU_GEM_DOMAIN_GTT,
+		.flags = AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED | AMDGPU_GEM_CREATE_CPU_GTT_USWC,
+		.type = ttm_bo_type_kernel,
+		.bo_ptr_size = sizeof(struct amdgpu_bo),
+	};
+	int r;
+
+	if (session->input_bo)
+		return session->input_pitch == pitch && session->input_rows == rows &&
+			session->input_uv == uv ? 0 : -EOPNOTSUPP;
+	r = amdgpu_bo_create(session->adev, &bp, &session->input_bo);
+	if (r)
+		return r;
+	r = amdgpu_bo_reserve(session->input_bo, false);
+	if (r)
+		goto free;
+	r = amdgpu_bo_pin(session->input_bo, AMDGPU_GEM_DOMAIN_GTT);
+	if (r)
+		goto unreserve;
+	r = amdgpu_ttm_alloc_gart(&session->input_bo->tbo);
+	if (r)
+		goto unpin;
+	r = amdgpu_bo_kmap(session->input_bo, &session->input_cpu);
+	if (r)
+		goto unpin;
+	session->input_gpu = amdgpu_bo_gpu_offset(session->input_bo);
+	if (session->input_gpu >= (1ULL << 40) ||
+	    bp.size > (1ULL << 40) - session->input_gpu) {
+		amdgpu_bo_kunmap(session->input_bo);
+		session->input_cpu = NULL;
+		r = -ERANGE;
+		goto unpin;
+	}
+	session->input_pitch = pitch;
+	session->input_rows = rows;
+	session->input_uv = uv;
+	memset_io(session->input_cpu, 0, bp.size);
+	amdgpu_bo_unreserve(session->input_bo);
+	return 0;
+unpin:
+	amdgpu_bo_unpin(session->input_bo);
+unreserve:
+	amdgpu_bo_unreserve(session->input_bo);
+free:
+	amdgpu_bo_unref(&session->input_bo);
+	return r;
+}
+
+static int vce_liverpool_gladius_input(struct amdgpu_cs_parser *parser,
+		struct vce_liverpool_session *session, struct amdgpu_bo *source,
+		u64 luma, u64 chroma, u32 pitch)
+{
+	struct dma_fence *fence;
+	u32 rows = ALIGN(session->height, 16), i;
+	u32 source_crc = 0;
+	u64 bytes;
+	void *cpu, *destination;
+	long remaining = 5 * HZ;
+	int r;
+
+	if (parser->gang_size != 1)
+		return -EOPNOTSUPP;
+	if (session->tail) {
+		remaining = dma_fence_wait_timeout(session->tail, true, remaining);
+		if (remaining <= 0)
+			return remaining ?: -ETIMEDOUT;
+		r = dma_fence_get_status(session->tail);
+		if (r < 0)
+			return r;
+	}
+	while ((fence = amdgpu_sync_get_fence(&parser->sync))) {
+		remaining = dma_fence_wait_timeout(fence, true, remaining);
+		r = dma_fence_get_status(fence);
+		dma_fence_put(fence);
+		if (remaining <= 0)
+			return remaining ?: -ETIMEDOUT;
+		if (r < 0)
+			return r;
+	}
+	remaining = dma_resv_wait_timeout(source->tbo.base.resv,
+		DMA_RESV_USAGE_BOOKKEEP, true, remaining);
+	if (remaining <= 0)
+		return remaining ?: -ETIMEDOUT;
+	if (chroma < luma || chroma - luma < (u64)pitch * rows ||
+	    chroma - luma > 0x2000000 - (u64)pitch * rows / 2)
+		return -EOPNOTSUPP;
+	r = vce_liverpool_gladius_allocate_input(session, pitch, rows, chroma - luma);
+	if (r)
+		return r;
+	destination = session->input_cpu;
+	bytes = (u64)session->input_uv + (u64)pitch * rows / 2;
+	r = amdgpu_bo_kmap(source, &cpu);
+	if (r)
+		return r;
+	amdgpu_hdp_invalidate(session->adev, NULL);
+	if (READ_ONCE(vce_liverpool_trace))
+		source_crc = vce_liverpool_gladius_crc(cpu, luma, chroma, pitch, rows);
+	memset_io(destination, 0, bytes);
+	for (i = 0; i < rows; i++)
+		memcpy_fromio(destination + i * pitch,
+			cpu + luma + (u64)i * pitch, pitch);
+	for (i = 0; i < rows / 2; i++)
+		memcpy_fromio(destination + session->input_uv + i * pitch,
+			cpu + chroma + (u64)i * pitch, pitch);
+	amdgpu_bo_kunmap(source);
+	clflush_cache_range(destination, bytes);
+	amdgpu_hdp_flush(session->adev, NULL);
+	amdgpu_gart_invalidate_tlb(session->adev);
+	if (READ_ONCE(vce_liverpool_trace))
+		dev_info(session->adev->dev,
+			"VCE input copied handle=%u record=%u gpu=%llx source=%08x copy=%08x pitch=%u rows=%u uv=%u\n",
+			session->native_handle, session->record, session->input_gpu, source_crc,
+			vce_liverpool_gladius_crc(destination, 0, session->input_uv, pitch, rows),
+			pitch, rows, session->input_uv);
 	return 0;
 }
 
@@ -477,6 +714,7 @@ int vce_liverpool_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 		dma_fence_context_alloc(1), 1);
 	INIT_WORK(&native->work, vce_liverpool_finish);
 	INIT_WORK(&native->release, vce_liverpool_release_job);
+	INIT_WORK(&native->cleanup, vce_liverpool_cleanup_job);
 	native->adev = adev;
 	job->vce_native = native;
 	mutex_lock(&adev->vce.native_mutex);
@@ -511,6 +749,8 @@ int vce_liverpool_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 		session->fps_den = 1;
 		session->qp_i = session->qp_p = 20;
 		session->record = 0;
+		session->direct_input = amdgpu_vce_is_gladius(adev) &&
+			READ_ONCE(vce_liverpool_direct);
 		adev->vce.native_sessions[slot] = session;
 		allocated = true;
 	}
@@ -623,14 +863,52 @@ int vce_liverpool_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 			r = r ?: -EOPNOTSUPP;
 			goto free_translated;
 		}
-		r = amdgpu_bo_pin(input_bo,
-			amdgpu_mem_type_to_domain(input_bo->tbo.resource->mem_type));
-		if (r)
-			goto free_translated;
-		native->input_bo = amdgpu_bo_ref(input_bo);
-		native->input_pinned = true;
-		input_y += amdgpu_bo_gpu_offset(input_bo);
-		input_uv += amdgpu_bo_gpu_offset(input_bo);
+		if (amdgpu_vce_is_gladius(adev)) {
+			r = amdgpu_bo_pin(input_bo,
+				session->direct_input ? AMDGPU_GEM_DOMAIN_GTT :
+				amdgpu_mem_type_to_domain(input_bo->tbo.resource->mem_type));
+			if (r)
+				goto free_translated;
+			native->input_bo = amdgpu_bo_ref(input_bo);
+			native->input_pinned = true;
+			if (session->direct_input) {
+				if (input_uv < input_y || input_uv - input_y > U32_MAX) {
+					r = -EOPNOTSUPP;
+					goto free_translated;
+				}
+				r = amdgpu_ttm_alloc_gart(&input_bo->tbo);
+				if (r)
+					goto free_translated;
+				r = amdgpu_sync_resv(adev, &p->sync, input_bo->tbo.base.resv,
+					AMDGPU_SYNC_ALWAYS, NULL);
+				if (r)
+					goto free_translated;
+				session->input_pitch = original[encode + 14];
+				session->input_rows = ALIGN(session->height, 16);
+				session->input_uv = input_uv - input_y;
+				input_y += amdgpu_bo_gpu_offset(input_bo);
+				input_uv += amdgpu_bo_gpu_offset(input_bo);
+				session->input_gpu = input_y;
+				amdgpu_hdp_flush(adev, NULL);
+				amdgpu_gart_invalidate_tlb(adev);
+			} else {
+				r = vce_liverpool_gladius_input(p, session, input_bo,
+					input_y, input_uv, original[encode + 14]);
+				if (r)
+					goto free_translated;
+				input_y = session->input_gpu;
+				input_uv = input_y + session->input_uv;
+			}
+		} else {
+			r = amdgpu_bo_pin(input_bo,
+				amdgpu_mem_type_to_domain(input_bo->tbo.resource->mem_type));
+			if (r)
+				goto free_translated;
+			native->input_bo = amdgpu_bo_ref(input_bo);
+			native->input_pinned = true;
+			input_y += amdgpu_bo_gpu_offset(input_bo);
+			input_uv += amdgpu_bo_gpu_offset(input_bo);
+		}
 		if (input_y >= (1ULL << 40) || luma_size > (1ULL << 40) - input_y ||
 		    input_uv >= (1ULL << 40) || chroma_size > (1ULL << 40) - input_uv) {
 			r = -ERANGE;
@@ -641,6 +919,27 @@ int vce_liverpool_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 			native->output_size, &native->output_bo, &native->output);
 		if (r)
 			goto free_translated;
+		if (amdgpu_vce_is_gladius(adev)) {
+			struct vce_gladius_config config;
+			bool rate_changed = session->encoded_qp_i != session->qp_i ||
+				session->encoded_qp_p != session->qp_p ||
+				session->encoded_fps_num != session->fps_num ||
+				session->encoded_fps_den != session->fps_den;
+
+			vce_liverpool_gladius_config(session, &config, native->output_size);
+			if (!session->started)
+				count = vce_gladius_emit_create(words, &config);
+			count += vce_gladius_emit_encode(words + count, &config,
+				input_y, input_uv, session->input_pitch, type == 3 ? 2 : type,
+				original[encode + 81], original[encode + 82],
+				!session->started, rate_changed);
+			session->started = true;
+			session->encoded_qp_i = session->qp_i;
+			session->encoded_qp_p = session->qp_p;
+			session->encoded_fps_num = session->fps_num;
+			session->encoded_fps_den = session->fps_den;
+			goto encoded;
+		}
 		if (!session->started) {
 			memcpy(words, vce_liverpool_create, sizeof(vce_liverpool_create));
 			words[2] = session->native_handle;
@@ -688,14 +987,19 @@ int vce_liverpool_parse_cs(struct amdgpu_cs_parser *p, struct amdgpu_job *job,
 		vce_liverpool_set_address(commands + 316, session->gpu + session->header);
 		vce_liverpool_set_address(commands + 318, session->gpu + session->header);
 		count += ARRAY_SIZE(vce_liverpool_encode);
+encoded:
 		native->encode = true;
 		native->record = session->record;
 		session->record = (session->record + 1) % 5;
 	} else if (destroy && session->started) {
 		u32 destroy_words[] = {12, 1, session->native_handle, 8, 5};
 
-		memcpy(words, destroy_words, sizeof(destroy_words));
-		count = ARRAY_SIZE(destroy_words);
+		if (amdgpu_vce_is_gladius(adev))
+			count = vce_gladius_emit_destroy(words, session->native_handle);
+		else {
+			memcpy(words, destroy_words, sizeof(destroy_words));
+			count = ARRAY_SIZE(destroy_words);
+		}
 	} else {
 		words[0] = 8;
 		words[1] = 0;
@@ -760,6 +1064,8 @@ int vce_liverpool_destroy_session(struct amdgpu_device *adev, u32 handle, u32 *w
 			words[3] = 8;
 			words[4] = 5;
 			count = 5;
+			if (amdgpu_vce_is_gladius(adev))
+				count = vce_gladius_emit_destroy(words, session->native_handle);
 		}
 		job->vce_native = kzalloc(sizeof(*job->vce_native), GFP_KERNEL);
 		if (!job->vce_native) {
@@ -771,6 +1077,7 @@ int vce_liverpool_destroy_session(struct amdgpu_device *adev, u32 handle, u32 *w
 			&job->vce_native->lock, dma_fence_context_alloc(1), 1);
 		INIT_WORK(&job->vce_native->work, vce_liverpool_finish);
 		INIT_WORK(&job->vce_native->release, vce_liverpool_release_job);
+		INIT_WORK(&job->vce_native->cleanup, vce_liverpool_cleanup_job);
 		job->vce_native->adev = adev;
 		job->vce_native->session = session;
 		job->vce_native->control_only = count == 2;

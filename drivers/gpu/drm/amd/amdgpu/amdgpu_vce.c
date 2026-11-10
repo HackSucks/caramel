@@ -26,6 +26,7 @@
  */
 
 #include <linux/firmware.h>
+#include <linux/crc32.h>
 #include <linux/module.h>
 
 #include <drm/drm.h>
@@ -37,6 +38,7 @@
 #include "amdgpu_cs.h"
 #include "cikd.h"
 #include "vce_liverpool.h"
+#include "vce_gladius.h"
 
 /* 1 second timeout */
 #define VCE_IDLE_TIMEOUT	msecs_to_jiffies(1000)
@@ -51,6 +53,7 @@
 #define FIRMWARE_KAVERI	"amdgpu/kaveri_vce.bin"
 #define FIRMWARE_HAWAII	"amdgpu/hawaii_vce.bin"
 #define FIRMWARE_LIVERPOOL "amdgpu/liverpool_vce.bin"
+#define FIRMWARE_GLADIUS "amdgpu/gladius_vce.bin"
 #define FIRMWARE_MULLINS	"amdgpu/mullins_vce.bin"
 #endif
 #define FIRMWARE_TONGA		"amdgpu/tonga_vce.bin"
@@ -75,6 +78,7 @@ MODULE_FIRMWARE(FIRMWARE_KABINI);
 MODULE_FIRMWARE(FIRMWARE_KAVERI);
 MODULE_FIRMWARE(FIRMWARE_HAWAII);
 MODULE_FIRMWARE(FIRMWARE_LIVERPOOL);
+MODULE_FIRMWARE(FIRMWARE_GLADIUS);
 MODULE_FIRMWARE(FIRMWARE_MULLINS);
 #endif
 MODULE_FIRMWARE(FIRMWARE_TONGA);
@@ -110,6 +114,15 @@ bool amdgpu_vce_is_native(struct amdgpu_device *adev)
 #endif
 }
 
+bool amdgpu_vce_is_gladius(struct amdgpu_device *adev)
+{
+#ifdef CONFIG_X86_PS4
+	return adev->asic_type == CHIP_GLADIUS;
+#else
+	return false;
+#endif
+}
+
 /**
  * amdgpu_vce_firmware_name() - determine the firmware file name for VCE
  *
@@ -139,6 +152,8 @@ static const char *amdgpu_vce_firmware_name(struct amdgpu_device *adev)
 		return FIRMWARE_HAWAII;
 	case CHIP_LIVERPOOL:
 		return amdgpu_vce_is_native(adev) ? FIRMWARE_LIVERPOOL : NULL;
+	case CHIP_GLADIUS:
+		return amdgpu_vce_is_gladius(adev) ? FIRMWARE_GLADIUS : NULL;
 	case CHIP_MULLINS:
 		return FIRMWARE_MULLINS;
 #endif
@@ -212,6 +227,18 @@ int amdgpu_vce_early_init(struct amdgpu_device *adev)
 		return -EINVAL;
 	}
 
+	if (amdgpu_vce_is_gladius(adev)) {
+		if (adev->vce.fw->size != 150368 ||
+		    le32_to_cpu(hdr->ucode_size_bytes) != 150112 ||
+		    le32_to_cpu(hdr->ucode_array_offset_bytes) != 256 ||
+		    (crc32_le(~0u, adev->vce.fw->data + 256, 150112) ^ ~0u) != 0x42851e62) {
+			amdgpu_ucode_release(&adev->vce.fw);
+			return -EINVAL;
+		}
+		adev->vce.fw_version = 0;
+		dev_info(adev->dev, "Gladius VCE firmware B validated, CRC32 42851e62\n");
+		return 0;
+	}
 	ucode_version = le32_to_cpu(hdr->ucode_version);
 	version_major = (ucode_version >> 20) & 0xfff;
 	version_minor = (ucode_version >> 8) & 0xfff;
@@ -246,8 +273,8 @@ int amdgpu_vce_sw_init(struct amdgpu_device *adev, unsigned long size)
 		return -ENOENT;
 
 	r = amdgpu_bo_create_kernel(adev, size, PAGE_SIZE,
-				    AMDGPU_GEM_DOMAIN_VRAM |
-				    AMDGPU_GEM_DOMAIN_GTT,
+				    amdgpu_vce_is_gladius(adev) ? AMDGPU_GEM_DOMAIN_GTT :
+				    AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT,
 				    &adev->vce.vcpu_bo,
 				    &adev->vce.gpu_addr, &adev->vce.cpu_addr);
 	if (r) {
@@ -604,7 +631,7 @@ static int amdgpu_vce_get_destroy_msg(struct amdgpu_ring *ring, uint32_t handle,
 
 	/* stitch together an VCE destroy msg */
 	ib->length_dw = 0;
-	if (amdgpu_vce_is_native(ring->adev)) {
+	if (amdgpu_vce_is_native(ring->adev) || amdgpu_vce_is_gladius(ring->adev)) {
 		r = vce_liverpool_destroy_session(ring->adev, handle, ib->ptr, job);
 		if (r < 0)
 			goto err;
@@ -980,7 +1007,7 @@ int amdgpu_vce_ring_parse_cs_legacy(struct amdgpu_cs_parser *p,
 
 		case 0x05000001: /* context buffer */
 			r = amdgpu_vce_cs_reloc(p, ib, idx + 3, idx + 2,
-						*size * 2, 0);
+				amdgpu_vce_is_gladius(p->adev) ? 0 : *size * 2, 0);
 			if (r)
 				goto out;
 			break;
@@ -1051,7 +1078,7 @@ out:
 int amdgpu_vce_ring_parse_cs(struct amdgpu_cs_parser *p,
 		struct amdgpu_job *job, struct amdgpu_ib *ib)
 {
-	if (amdgpu_vce_is_native(p->adev))
+	if (amdgpu_vce_is_native(p->adev) || amdgpu_vce_is_gladius(p->adev))
 		return vce_liverpool_parse_cs(p, job, ib);
 	return amdgpu_vce_ring_parse_cs_legacy(p, job, ib);
 }
@@ -1239,6 +1266,8 @@ int amdgpu_vce_ring_test_ib(struct amdgpu_ring *ring, long timeout)
 	struct dma_fence *fence = NULL;
 	long r;
 
+	if (amdgpu_vce_is_gladius(ring->adev))
+		return vce_gladius_test_ib(ring, timeout);
 	if (amdgpu_vce_is_native(ring->adev))
 		return vce_liverpool_test_ib(ring, timeout);
 
