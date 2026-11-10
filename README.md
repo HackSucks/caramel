@@ -35,6 +35,7 @@ tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pr
 ## TODO
 
 - document the liverpool and gladius uvd and vce work properly: the native packets, the firmware, the gameos captures it is based on and how it was tested. right now it only lives in my notes and in my head, and i wont be around forever
+- document every engine the same way (gpu, samu crypto and rng, uvd, vce, hdmi bridge, emc and icc, southbridges, clocks) and how each one was done: what was reversed from the system kernel, the captures, the tools and the live tests
 
 ## Install
 
