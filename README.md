@@ -8,7 +8,7 @@ before this every southbridge had its own kernel and baikal was never really fix
 
 - hdmi output, the edid from your tv, hotplug
 - vulkan (radv) and opengl (radeonsi), gpu compute, also on pro with stock mesa
-- hardware video decode and encode (uvd and vce), so hardware transcoding works. not on pro yet
+- hardware video decode and encode (uvd and vce), so hardware transcoding works
 - usb (usb 3 at 5 gbit), sata hdd and ssd, blu-ray drive
 - ethernet. baikal with the new mts driver at full gigabit, aeolia and belize with sky2
 - wifi and bluetooth, ds4 reconnects with one press
@@ -23,7 +23,6 @@ tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pr
 ## Known issues
 
 - on pro the gpu microcode skips predication, so conditional rendering always draws
-- no hardware video on pro yet, uvd and vce are off for gladius
 - 4k only up to 30 hz. no 4k60, hdr or deep color yet
 - no suspend or hibernate
 - the gpu clock stays at its top speed, it does not clock down when idle
@@ -32,6 +31,10 @@ tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pr
 - usb 3 drives on baikal run without uas for now, will be fixed
 - one belize pro with a 4k tv shows a green picture and no 4k modes, will be fixed
 - dp link training errors in dmesg are harmless, display works
+
+## TODO
+
+- document the liverpool and gladius uvd and vce work properly: the native packets, the firmware, the gameos captures it is based on and how it was tested. right now it only lives in my notes and in my head, and i wont be around forever
 
 ## Install
 
