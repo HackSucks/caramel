@@ -40,7 +40,7 @@ const char linux_banner[] =
 	"\n"
 	"  strawberry was here\n"
 	"  also strawberry kernel team was here - rmux\n"
-	"  this kernel is dedicated to my girlfriend, it is named after her\n"
+	"  this kernel is dedicated to my girlfriend, strawberry is what i call her\n"
 	"\n"
 	"  Devs      : ArabPixel, feeRnt, bjhabibie\n"
 	"  Coord     : dreams-of-formaldehyde, TheVorkMan, vanillitefroyo\n"
