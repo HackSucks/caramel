@@ -80,7 +80,7 @@ amdgpu-$(CONFIG_PERF_EVENTS) += amdgpu_pmu.o
 
 # add asic specific block
 amdgpu-$(CONFIG_DRM_AMDGPU_CIK)+= cik.o cik_ih.o \
-	dce_v8_0.o gfx_v7_0.o cik_sdma.o uvd_v4_2.o vce_v2_0.o vce_liverpool.o vce_liverpool_compat.o \
+	dce_v8_0.o gfx_v7_0.o cik_sdma.o uvd_v4_2.o vce_v2_0.o vce_liverpool.o vce_liverpool_compat.o vce_gladius.o vce_gladius_compat.o \
 	liverpool_clk.o liverpool_smu.o
 
 amdgpu-$(CONFIG_DRM_AMDGPU_SI)+= si.o gmc_v6_0.o gfx_v6_0.o si_ih.o si_dma.o dce_v6_0.o \
@@ -196,7 +196,7 @@ amdgpu-y += mes_userqueue.o
 # add UVD block
 amdgpu-y += \
 	amdgpu_uvd.o \
-	uvd_v5_0.o \
+	uvd_v5_0.o uvd_gladius.o \
 	uvd_v6_0.o \
 	uvd_v7_0.o
 

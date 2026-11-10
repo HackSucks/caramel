@@ -30,6 +30,8 @@ REQUIRED_PS4_AMDGPU_FW=(
     "amdgpu/gladius_rlc.bin"
     "amdgpu/gladius_sdma.bin"
     "amdgpu/gladius_sdma1.bin"
+    "amdgpu/gladius_uvd.bin"
+    "amdgpu/gladius_vce.bin"
 )
 declare -A FIRMWARE_URL_OVERRIDES
 FIRMWARE_URL_OVERRIDES["mrvl/sd8797_uapsta.bin"]="useCustomFirmware"

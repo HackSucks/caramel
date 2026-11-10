@@ -50,6 +50,7 @@
 #include "uvd_v5_0.h"
 #include "vce_v2_0.h"
 #include "vce_liverpool.h"
+#include "vce_gladius.h"
 #include "cik_dpm.h"
 
 #include "uvd/uvd_4_2_d.h"
@@ -150,7 +151,7 @@ static const struct amdgpu_video_codecs cik_video_codecs_decode =
 static int cik_query_video_codecs(struct amdgpu_device *adev, bool encode,
 				  const struct amdgpu_video_codecs **codecs)
 {
-	if (encode && amdgpu_vce_is_native(adev)) {
+	if (encode && (amdgpu_vce_is_native(adev) || amdgpu_vce_is_gladius(adev))) {
 		*codecs = &liverpool_video_codecs_encode;
 		return 0;
 	}
@@ -2780,8 +2781,8 @@ int cik_set_ip_blocks(struct amdgpu_device *adev)
 		amdgpu_device_ip_block_add(adev, &dce_v8_1_ip_block);
 		amdgpu_device_ip_block_add(adev, &gfx_v7_1_ip_block);
 		amdgpu_device_ip_block_add(adev, &cik_sdma_ip_block);
-		/*amdgpu_device_ip_block_add(adev, &uvd_v4_2_ip_block)*/;
-		/*amdgpu_device_ip_block_add(adev, &vce_v2_0_ip_block)*/;
+		amdgpu_device_ip_block_add(adev, &uvd_v5_0_ip_block);
+		amdgpu_device_ip_block_add(adev, &vce_gladius_ip_block);
 		break;
 	default:
 		/* FIXME: not supported yet */
