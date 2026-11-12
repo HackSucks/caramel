@@ -259,7 +259,7 @@ fi
 
 if [[ -f config ]]; then
     echo -e "\e[1;34m[*]\e[0m Moving 'config' -> '.config'"
-    mv config .config
+    cp config .config
 else
     echo -e "\e[1;31mERROR:\e[0m No .config found." >&2
     exit 1
