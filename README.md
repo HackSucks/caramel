@@ -59,6 +59,19 @@ the loader picks the cmdline for your southbridge. if you want your own put it i
 
 `--option 1` builds, `--option 2` fetches firmware, `--option 3` does both. clang only. `./build.sh --help` shows the profiles. output is `out/bzImage`.
 
+Kernel config can be customized for local builds by adding overrides to `configs/override.cfg`. Example:
+
+```sh
+cat >configs/override.cfg <<END
+enable CONFIG_KERNEL_BZIP2
+disable CONFIG_KERNEL_ZSTD
+set-val CONFIG_HZ 500
+set-str CONFIG_ZRAM_DEF_COMP lz4
+END
+
+./build.sh --option 1
+```
+
 if you want to contribute fork it and open a merge request. dont base a kernel on this one, dump it into a .patch repo and call it your own work.
 
 ## Showcase
