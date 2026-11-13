@@ -207,3 +207,4 @@ sphinx_*/
 !.dockerignore
 !.Dockerfile*
 /include/ksym/
+/configs/override.cfg

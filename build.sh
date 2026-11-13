@@ -60,11 +60,28 @@ lto_label() {
     fi
 }
 
+validate_config_action() {
+    local action="$1" name="$2" value="$3"
+    [[ -n "$name" ]] || return 1
+    case "$action" in
+        enable|disable) [[ -z "$value" ]] || return 1 ;;
+        set-val) [[ "$value" =~ ^(y|m|n|(0[xX])?[0-9a-fA-F]+)$ ]] || return 1 ;;
+        set-str) ;;
+        *) return 1 ;;
+    esac
+}
+
 apply_config_file() {
     local file="$1"
     local action name value
-    while read -r action name value; do
+    while read -r action name value || [[ -n "$action" ]]; do
         [[ -z "$action" || "$action" == \#* ]] && continue
+
+        if ! validate_config_action "$action" "$name" "$value"; then
+            echo -e "\e[1;31mERROR:\e[0m Invalid config action '$action $name $value' in file '$file'" >&2
+            exit 1
+        fi
+
         case "$action" in
             enable)  scripts/config --enable  "$name" ;;
             disable) scripts/config --disable "$name" ;;
@@ -374,6 +391,11 @@ if [[ "$DO_BUILD" == "1" ]]; then
     if [[ "$PROFILE" == "slopmax" || "$PROFILE" == "slopium" ]]; then
         echo -e "\e[1;34m[*]\e[0m Applying KVM support..."
         apply_config_file "configs/kvm.cfg"
+    fi
+
+    if [[ -f "configs/override.cfg" ]]; then
+        echo -e "\e[1;34m[*]\e[0m Found override.cfg; applying config overrides..."
+        apply_config_file "configs/override.cfg"
     fi
 
     echo -e "\e[1;34m[*]\e[0m Running olddefconfig..."
