@@ -10,7 +10,7 @@ Caramel is an independent fork, not endorsed by Strawberry's maintainer.
 ## What's different from Strawberry
 - Rebased onto Linux **7.3.4** (Strawberry 7.3.3).
 - `ps4_led.boot_color=<name>` picks the front LED colour at boot.
-- Boot logo enabled (one Tux per CPU, shown while fbcon starts).
+- Boot logo enabled (one Tux per CPU; 8 seen on a Belize 2).
 - Caramel branding in the version string, banner and CI.
 - CI builds without a private firmware token.
 
@@ -20,7 +20,7 @@ Caramel is an independent fork, not endorsed by Strawberry's maintainer.
 | Belize 2 (Slim) | Caramel 7.3.4, SlopMax, NoLTO | Boots; display, WiFi and Bluetooth behave like Strawberry 7.3.3; LED colour works |
 | Aeolia, Baikal | Caramel | No results yet. Testers wanted |
 
-Not verified: the boot logo, and one Baikal-only code path merged during
+Not verified: one Baikal-only code path merged during
 the rebase (video encode, `amdgpu_job.c`).
 
 ## LED colours
