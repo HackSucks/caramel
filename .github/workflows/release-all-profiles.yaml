@@ -15,7 +15,7 @@ jobs:
         profile: [Server, General, SlopMax, Slopium]
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: "Build ${{ matrix.profile }} (FullLTO)"
 
     steps:
@@ -119,7 +119,7 @@ jobs:
   release:
     needs: build
     if: always() && needs.build.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
