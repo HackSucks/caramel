@@ -1,11 +1,11 @@
 # Caramel Linux
 
-A PS4 Linux kernel tree based on **Strawberry** by Dievas (rmux), which
+A PS4 Linux kernel tree based on **Strawberry Linux** by Dievas (rmux), which
 builds on the work of the PS4 Linux community. Caramel keeps the Strawberry
 patch stack, tracks newer upstream kernels, and adds experiments on top.
 
 Caramel is an independent fork. It is not endorsed by Strawberry's
-maintainer. Original authorship is preserved on every commit.
+maintainers.
 
 ## Status
 Early. Only the Strawberry 7.3.3 base has been verified by the maintainer
