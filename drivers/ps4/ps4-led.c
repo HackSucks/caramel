@@ -121,6 +121,10 @@ struct ps4_led_node {
 static DEFINE_MUTEX(ps4_led_lock);
 static const u8 *ps4_led_current_payload;
 
+static char *boot_color;
+module_param(boot_color, charp, 0444);
+MODULE_PARM_DESC(boot_color, "Boot LED colour: a name from /sys/class/leds/ps4:<name>:status");
+
 static int ps4_led_set_blocking(struct led_classdev *led_cdev,
 				enum led_brightness value)
 {
@@ -262,6 +266,7 @@ static struct ps4_led_node ps4_led_nodes[] = {
 static int ps4_led_probe(struct platform_device *pdev)
 {
 	const u8 *boot_payload;
+	const char *boot_name;
 	u8 reply[0x30];
 	int i, ret;
 
@@ -277,6 +282,24 @@ static int ps4_led_probe(struct platform_device *pdev)
 	}
 
 	boot_payload = ps4_is_baikal() ? led_violet_blue : led_purple;
+	boot_name = ps4_is_baikal() ? "violet_blue" : "purple";
+
+	if (boot_color) {
+		char want[48];
+
+		snprintf(want, sizeof(want), "ps4:%s:status", boot_color);
+		for (i = 0; i < ARRAY_SIZE(ps4_led_nodes); i++) {
+			if (ps4_led_nodes[i].cdev.name &&
+			    !strcmp(ps4_led_nodes[i].cdev.name, want)) {
+				boot_payload = ps4_led_nodes[i].payload;
+				boot_name = boot_color;
+				break;
+			}
+		}
+		if (i == ARRAY_SIZE(ps4_led_nodes))
+			dev_warn(&pdev->dev, "unknown boot_color '%s', using default\n",
+				 boot_color);
+	}
 
 	memset(reply, 0, sizeof(reply));
 	ret = ps4sb_icc_cmd(PS4_LED_ICC_MAJOR, PS4_LED_ICC_MINOR,
@@ -289,8 +312,7 @@ static int ps4_led_probe(struct platform_device *pdev)
 		ps4_led_current_payload = boot_payload;
 
 	dev_info(&pdev->dev, "PS4 LED driver ready: %zu colors, boot color: %s\n",
-		 ARRAY_SIZE(ps4_led_nodes),
-		 boot_payload == led_violet_blue ? "violet blue" : "purple");
+		 ARRAY_SIZE(ps4_led_nodes), boot_name);
 
 	return 0;
 }
