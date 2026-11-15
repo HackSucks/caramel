@@ -681,6 +681,19 @@ int amdgpu_bo_create(struct amdgpu_device *adev,
 
 	bo->flags = bp->flags;
 
+	if ((adev->asic_type == CHIP_LIVERPOOL ||
+	     adev->asic_type == CHIP_GLADIUS) &&
+	    bp->type == ttm_bo_type_device &&
+	    (bo->preferred_domains & AMDGPU_GEM_DOMAIN_VRAM) &&
+	    !(bo->preferred_domains & ~(AMDGPU_GEM_DOMAIN_VRAM |
+				       AMDGPU_GEM_DOMAIN_GTT)) &&
+	    (bo->allowed_domains & AMDGPU_GEM_DOMAIN_GTT) &&
+	    (bo->flags & AMDGPU_GEM_CREATE_NO_CPU_ACCESS) &&
+	    !(bo->flags & (AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED |
+			   AMDGPU_GEM_CREATE_COHERENT |
+			   AMDGPU_GEM_CREATE_EXT_COHERENT)))
+		bo->flags |= AMDGPU_GEM_CREATE_CPU_GTT_USWC;
+
 	if (adev->gmc.mem_partitions)
 		/* For GPUs with spatial partitioning, bo->xcp_id=-1 means any partition */
 		bo->xcp_id = bp->xcp_id_plus1 - 1;
