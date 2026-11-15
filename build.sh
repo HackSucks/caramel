@@ -360,7 +360,7 @@ if [[ "$DO_BUILD" == "1" ]]; then
     print_disclaimer
     echo -e "\e[1;34m[*]\e[0m Applying invariant config..."
 
-    LOCALVERSION_SUFFIX="-Strawberry-$(profile_label)-$(lto_label)"
+    LOCALVERSION_SUFFIX="-Caramel-$(profile_label)-$(lto_label)"
 
     echo -e "\e[1;34m[*]\e[0m Enabling $(lto_label)..."
     apply_config_file "configs/lto-${LTO_FLAVOR}.cfg"
@@ -426,7 +426,7 @@ if [[ "$DO_BUILD" == "1" ]]; then
     PROFILE_LABEL="$(profile_label)"
     KVER_BASE="${KVER%%-*}"
 
-    ARTIFACT_BASENAME="${KVER_BASE}-Strawberry-${PROFILE_LABEL}-${LTO_LABEL}"
+    ARTIFACT_BASENAME="${KVER_BASE}-Caramel-${PROFILE_LABEL}-${LTO_LABEL}"
     printf '%s\n' "${ARTIFACT_BASENAME}" > "${OUTPUT_DIR}/artifact_name.txt"
 
     echo -e "\e[1;32m[✓]\e[0m Build complete [${PROFILE} / ${LTO_LABEL}] -> ${OUTPUT_DIR}/bzImage (${KVER})"
