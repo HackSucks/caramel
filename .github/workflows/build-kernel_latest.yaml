@@ -1,5 +1,5 @@
-name: "Strawberry-LTS"
-run-name: "${{ github.event_name == 'workflow_dispatch' && format('Strawberry-{0}-{1}', inputs.profile, inputs.lto) || format('Strawberry-tag-{0}', github.ref_name) }}"
+name: "Caramel-LTS"
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Caramel-{0}-{1}', inputs.profile, inputs.lto) || format('Caramel-tag-{0}', github.ref_name) }}"
 
 on:
   workflow_dispatch:

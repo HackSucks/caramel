@@ -1,5 +1,5 @@
-name: "Strawberry-Release-All"
-run-name: "Strawberry release build (all 4 profiles, FullLTO) - ${{ github.ref_name }}"
+name: "Caramel-Release-All"
+run-name: "Caramel release build (all 4 profiles, FullLTO) - ${{ github.ref_name }}"
 
 on:
   workflow_dispatch:
@@ -147,7 +147,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Strawberry ${{ github.ref_name }}"
+          name: "Caramel ${{ github.ref_name }}"
           draft: true
           make_latest: false
           body: |
