@@ -30,7 +30,6 @@ on:
         type: choice
         options:
           - Hosted
-          - Self-hosted-PS5
   push:
     tags:
       - "v*"
