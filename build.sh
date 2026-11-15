@@ -393,6 +393,8 @@ if [[ "$DO_BUILD" == "1" ]]; then
         apply_config_file "configs/kvm.cfg"
     fi
 
+    apply_config_file "configs/caramel.cfg"
+
     if [[ -f "configs/override.cfg" ]]; then
         echo -e "\e[1;34m[*]\e[0m Found override.cfg; applying config overrides..."
         apply_config_file "configs/override.cfg"
