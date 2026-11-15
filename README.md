@@ -1,145 +1,36 @@
-# Strawberry PS4 Linux
+# Caramel Linux
 
-one kernel for every ps4. aeolia, belize and baikal. fat, slim and pro. linux 7.3.3.
+A PS4 Linux kernel tree based on **Strawberry** by Dievas (rmux), which
+builds on the work of the PS4 Linux community. Caramel keeps the Strawberry
+patch stack, tracks newer upstream kernels, and adds experiments on top.
 
-before this every southbridge had its own kernel and baikal was never really fixed, almost 6 years. this tree checks the southbridge at boot and runs the right paths for it. so its just one bzImage for all of them.
+Caramel is an independent fork. It is not endorsed by Strawberry's
+maintainer. Original authorship is preserved on every commit.
 
-## What works
+## Status
+Early. Only the Strawberry 7.3.3 base has been verified by the maintainer
+of this fork. Everything else is untested until listed below.
 
-- hdmi output, the edid from your tv, hotplug
-- vulkan (radv) and opengl (radeonsi), gpu compute, also on pro with stock mesa
-- hardware video decode and encode (uvd and vce), so hardware transcoding works
-- usb (usb 3 at 5 gbit), sata hdd and ssd, blu-ray drive
-- ethernet. baikal with the new mts driver at full gigabit, aeolia and belize with sky2
-- wifi and bluetooth, ds4 reconnects with one press
-- cpu frequency scaling, fan, power led, power button, reboot and power off
-- spi flash read on baikal
-- samu hardware crypto (aes xts for the internal hdd) and the hardware random number generator
-- real time clock, the time comes from the console itself, no network needed
-- tsc calibrated against the southbridge timer, high res timers on baikal
+## Branches
+| Branch | Purpose |
+| --- | --- |
+| `main` | Strawberry 7.3.3, unchanged |
+| `strawberry-upstream` | Untouched mirror of Strawberry, for diffing |
+| `next` | Strawberry's PS4 stack rebased onto upstream 7.3.4 |
+| `experimental`, `testing` | Planned |
 
-tested on aeolia, baikal slim, baikal pro, belize fat, belize slim and belize pro.
-
-## Known issues
-
-- on pro the gpu microcode skips predication, so conditional rendering always draws
-- 4k (30 and 60 hz) only on pro. no hdr or deep color yet
-- no suspend or hibernate
-- the gpu clock stays at its top speed, it does not clock down when idle
-- aeolia ethernet can keep one cpu core busy, fix is in progress
-- consoles with a dead rtc battery get no time at boot, ntp sets it
-- usb 3 drives on baikal run without uas for now, will be fixed
-- one belize pro with a 4k tv shows a green picture and no 4k modes, will be fixed
-- dp link training errors in dmesg are harmless, display works
-
-## TODO
-
-- document the liverpool and gladius uvd and vce work properly: the native packets, the firmware, the gameos captures it is based on and how it was tested. right now it only lives in my notes and in my head, and i wont be around forever
-- document every engine the same way (gpu, samu crypto and rng, uvd, vce, hdmi bridge, emc and icc, southbridges, clocks) and how each one was done: what was reversed from the system kernel, the captures, the tools and the live tests
-
-## Install
-
-you need the loader and an initramfs:
-
-- loader: [ps4-linux-loader](https://github.com/ps4-linux/ps4-linux-loader)
-- initramfs: [initramfs-ps4 by GattoDev](https://github.com/GattoDev-debug/initramfs-ps4/releases/latest)
-
-put `bzImage` and `initramfs.cpio.gz` on a fat32 usb and send the loader payload.
-
-the loader picks the cmdline for your southbridge. if you want your own put it in `bootargs.txt` on the usb. uart console:
-
-- baikal: `console=uart8250,mmio32,0xC890E000`
-- aeolia and belize: `console=uart8250,mmio32,0xd0340000`
+## Tested
+| Console | Kernel | Result |
+| --- | --- | --- |
+| Belize 2 | Strawberry 7.3.3, SlopMax | Works well |
+| Belize 2 | Caramel `next` | Not yet tested |
+| Aeolia, Baikal | Caramel | No results, testers wanted |
 
 ## Build
+    ./build.sh --option 3 use=SlopMax lto=NoLTO
+`./build.sh --help` lists profiles. NoLTO is for quick test builds.
 
-```
-./build.sh --option 3 use=General lto=ThinLTO
-```
-
-`--option 1` builds, `--option 2` fetches firmware, `--option 3` does both. clang only. `./build.sh --help` shows the profiles. output is `out/bzImage`.
-
-Kernel config can be customized for local builds by adding overrides to `configs/override.cfg`. Example:
-
-```sh
-cat >configs/override.cfg <<END
-enable CONFIG_KERNEL_BZIP2
-disable CONFIG_KERNEL_ZSTD
-set-val CONFIG_HZ 500
-set-str CONFIG_ZRAM_DEF_COMP lz4
-END
-
-./build.sh --option 1
-```
-
-if you want to contribute fork it and open a merge request. dont base a kernel on this one, dump it into a .patch repo and call it your own work.
-
-## Showcase
-
-hardware transcoding on a baikal slim. obs records the screen with the vce encoder at 60fps while mpv plays a video on uvd, cpu stays low. click the picture for the video:
-
-[![hardware transcoding](docs/hwtranscode.jpg)](docs/hwtranscode.mp4)
-
-streaming the ps4 desktop with moonlight, 1080p 60fps h264 from the hardware encoder, vkcube running on radv:
-
-![moonlight](docs/moonlight.png)
-
-desktop and vulkan on 7.3.3, vulkaninfo shows radv on liverpool:
-
-[![desktop and vulkan](docs/desktop-vulkan.jpg)](docs/desktop-vulkan.mp4)
-
-usb, ethernet, wifi and bluetooth:
-
-[![usb, network and bluetooth](docs/usb-net-bt.jpg)](docs/usb-net-bt.mp4)
-
-## About KHEOPS
-
-people keep saying i stole their code. i wrote down whats really inside their kernels, what they said themselves, and the kernels that went around with my name swapped out. its all in [KHEOPS.md](KHEOPS.md).
-
-## Credits
-
-### PS4 Linux
-
-- fail0verflow, the original ps4 linux
-- whitehax0r, the original 5.4 baikal bringup (ps4-linux-baikal). this opened the door
-- crashniels, the ps4 tree this is based on
-- Package (feeRnt), original 6.15 aeolia and belize source, mt7668 wifi, ci and lots of bridge fixes
-- Blyadimir, uart, usb, display, endless testing. this work wouldnt exist without him
-- deWaardt, baikal hardware maintainer, early tests
-- leg (eclipsed.starr, dreams-of-formaldehyde), bzImage uploads, coordination
-- M H (mircoho), ioremap, ethernet and apcie fixes
-- Anthony Maniatopoulos (manya4090, Manya3084), gladius gpu setup and the smu through samu, testing and logs
-- Regie Vorkman (TheVorkMan, Regus Prime), dmi strings and testing
-- Comfy702, mt7668 bluetooth on baikal
-
-### Loader
-
-- marcan, shuffle2, eeply, rancido, valeryy, ethylamine, Joonie86 (linux)
-- sleirsgoevy, AlAzif, KiwiDog, Specter, Celesteblue, ChendoChap, zecoxao, SocraticBliss, ctn123 (exploits)
-- bestpig, EchoStretch, EinTim23, tihmstar, ArabPixel (offsets)
-- ArabPixel and me, firmware and southbridge agnostic loader
-
-### Initramfs and guide
-
-- GattoDev, [initramfs-ps4](https://github.com/GattoDev-debug/initramfs-ps4) (based on better-initramfs)
-- DionKill, [ps4 linux setup guide](https://dionkill.github.io/ps4-linux-tutorial/)
-
-### Team
-
-- devs: arabpixel (ArabPixel), packagebob (feeRnt), bjhabibie
-- coordination: eclipsed.starr (dreams-of-formaldehyde), hnoobi (TheVorkMan), vanillitefroyo
-
-### Testers
-
-- baikal: blyadimir., dewaardt, ss6530, isitnull., shyxuo, zarbok., vanixidk (vanixvanixvanix), jhuhblya, mechanical, kingabut, izanhower, sgtxkitkat, rodrigo, sudofrontman, fluffysheep
-- belize: adanielg18 (angeldanielguerrerocarrera), gattodev_real (GattoDev-debug), angheloisfish, wondermine, nadaman, razzle, hnoobi (TheVorkMan), vanillitefroyo
-- aeolia: rmuxnet (me), diema, lupusetflos, bjhabibie
-- testers and logs: bozo.ozod, erkki_69_men.com, Bbang, gryoza, fleur, TheGreekOne, felix_suicide, tteons, Scrooge
-
-### Special thanks
-
-- syrianclippy, emotional support
-
-### Maintainer
-
-- me, Dievas (7xkq / rmux)
+## More
+Features, known issues and the full credits are in
+[STRAWBERRY-README.md](STRAWBERRY-README.md). Those are Strawberry's claims,
+not independently verified by Caramel. Licence: GPL-2.0.
