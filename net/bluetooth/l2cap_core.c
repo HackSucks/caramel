@@ -4314,7 +4314,7 @@ static void l2cap_connect(struct l2cap_conn *conn, struct l2cap_cmd_hdr *cmd,
 
 	l2cap_chan_lock(pchan);
 	wait_for_encryption = hci_conn_ssp_enabled(conn->hcon) &&
-		!test_bit(HCI_CONN_ENCRYPT, &conn->hcon->flags) &&
+		!test_bit(HCI_CONN_ENCRYPT, conn->hcon->flags) &&
 		!hci_dev_test_flag(conn->hcon->hdev, HCI_SC_ONLY) &&
 		conn->hcon->sec_level != BT_SECURITY_FIPS;
 
