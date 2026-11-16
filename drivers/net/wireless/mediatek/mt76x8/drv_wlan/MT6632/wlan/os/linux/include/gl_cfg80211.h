@@ -176,32 +176,32 @@ mtk_cfg80211_change_iface(struct wiphy *wiphy,
 int
 mtk_cfg80211_add_key(struct wiphy *wiphy,
 		     struct wireless_dev *wdev, int link_id,
-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
+		     u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr, struct key_params *params);
 
 int
 mtk_cfg80211_get_key(struct wiphy *wiphy,
 		     struct wireless_dev *wdev, int link_id,
 		     u8 key_index,
-		     bool pairwise,
+		     enum nl80211_key_type key_type,
 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *));
 
 int
-mtk_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+mtk_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev, int link_id, u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr);
 #else
 int
 mtk_cfg80211_add_key(struct wiphy *wiphy,
 		     struct net_device *ndev, int link_id,
-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params);
+		     u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr, struct key_params *params);
 
 int
 mtk_cfg80211_get_key(struct wiphy *wiphy,
 		     struct net_device *ndev, int link_id,
 		     u8 key_index,
-		     bool pairwise,
+		     enum nl80211_key_type key_type,
 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *));
 
 int
-mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr);
+mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr);
 #endif
 
 int
