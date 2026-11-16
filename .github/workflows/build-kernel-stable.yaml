@@ -1,5 +1,5 @@
 name: "Caramel-Stable"
-run-name: "Caramel-Stable-SlopMax-ThinLTO (${{ github.ref_name }})"
+run-name: "Caramel-Stable-SlopMax (${{ github.ref_name }})"
 
 on:
   push:
@@ -20,13 +20,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ThinLTO is the release flavour. It is only built once the change has
-  # reached main or next, never on service/experimental branches.
-  thinlto:
-    name: "SlopMax / ThinLTO"
+  # Release flavour: both variants are published from main and next.
+  release:
+    name: "SlopMax / ${{ matrix.lto }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        lto:
+          - NoLTO
+          - ThinLTO
     uses: ./.github/workflows/build-kernel_latest.yaml
     with:
       profile: SlopMax
-      lto: ThinLTO
+      lto: ${{ matrix.lto }}
       runner: Hosted
     secrets: inherit
