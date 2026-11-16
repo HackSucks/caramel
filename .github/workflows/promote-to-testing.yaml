@@ -1,0 +1,91 @@
+name: "Caramel-Promote-Testing"
+run-name: "Promote ${{ inputs.branch }} to testing"
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Experimental branch whose NoLTO build was tested"
+        required: true
+        type: choice
+        options:
+          - experimental
+          - experimental-7.4-rc3
+      commit:
+        description: "Commit to promote (blank = current branch head)"
+        required: false
+        type: string
+      confirm:
+        description: "Type PROMOTE to confirm"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: "Promote to testing"
+    if: inputs.confirm == 'PROMOTE'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Map the experimental branch to its testing branch
+        id: target
+        shell: bash
+        run: |
+          case "${INPUT_BRANCH}" in
+            experimental)         TARGET="testing" ;;
+            experimental-7.4-rc3) TARGET="testing-7.4-rc3" ;;
+            *)
+              echo "::error::No testing branch mapped for ${INPUT_BRANCH}"
+              exit 1
+              ;;
+          esac
+          echo "branch=${TARGET}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
+
+      - name: Checkout the tested branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Resolve and verify the commit
+        id: resolve
+        shell: bash
+        env:
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+        run: |
+          SOURCE_REF="origin/${INPUT_BRANCH}"
+          if [[ -n "${INPUT_COMMIT}" ]]; then
+            git merge-base --is-ancestor "${INPUT_COMMIT}" "${SOURCE_REF}" || {
+              echo "::error::${INPUT_COMMIT} is not on ${INPUT_BRANCH}"
+              exit 1
+            }
+            TARGET_SHA="$(git rev-parse "${INPUT_COMMIT}^{commit}")"
+          else
+            TARGET_SHA="$(git rev-parse "${SOURCE_REF}")"
+          fi
+          echo "sha=${TARGET_SHA}" >> "$GITHUB_OUTPUT"
+          git --no-pager log -1 --format='Promoting %h %s' "${TARGET_SHA}"
+
+      - name: Update the testing branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          git push origin "${{ steps.resolve.outputs.sha }}:refs/heads/${{ steps.target.outputs.branch }}" --force-with-lease
+
+      - name: "Notify: promoted"
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WORKFLOW_WEBHOOK }}
+        run: |
+          bash .github/scripts/notify.sh \
+            "**${{ github.repository }}** promoted \`${{ inputs.branch }}\` @ \`${{ steps.resolve.outputs.sha }}\` to \`${{ steps.target.outputs.branch }}\`
+          https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

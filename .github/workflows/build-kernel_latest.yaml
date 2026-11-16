@@ -82,13 +82,8 @@ jobs:
         id: build-vars
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
-            PROFILE_INPUT="${{ inputs.profile }}"
-            LTO_INPUT="${{ inputs.lto }}"
-          else
-            PROFILE_INPUT="Server"
-            LTO_INPUT="ThinLTO"
-          fi
+          PROFILE_INPUT="${{ inputs.profile || 'Server' }}"
+          LTO_INPUT="${{ inputs.lto || 'ThinLTO' }}"
 
           bash ci-scripts/.github/scripts/resolve-build-vars.sh "$PROFILE_INPUT" "$LTO_INPUT" >> "$GITHUB_OUTPUT"
 
