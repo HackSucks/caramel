@@ -325,7 +325,6 @@ static const struct amd_ip_funcs vce_liverpool_ip_funcs = {
 	.hw_fini = vce_liverpool_hw_fini,
 	.suspend = vce_liverpool_suspend,
 	.resume = vce_liverpool_resume,
-	.is_idle = vce_liverpool_is_idle,
 	.wait_for_idle = vce_liverpool_wait_idle,
 	.set_clockgating_state = vce_liverpool_clockgating,
 	.set_powergating_state = vce_liverpool_powergating,
