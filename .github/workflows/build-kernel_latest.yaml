@@ -30,6 +30,27 @@ on:
         type: choice
         options:
           - Hosted
+  workflow_call:
+    inputs:
+      profile:
+        description: "Build Profile"
+        required: false
+        default: "Server"
+        type: string
+      lto:
+        description: "LTO Variant"
+        required: false
+        default: "ThinLTO"
+        type: string
+      runner:
+        description: "Runner"
+        required: false
+        default: "Hosted"
+        type: string
+    outputs:
+      artifact_name:
+        description: "Name of the uploaded kernel package"
+        value: ${{ jobs.build.outputs.artifact_name }}
   push:
     tags:
       - "v*"
@@ -38,7 +59,9 @@ jobs:
   build:
     permissions:
       contents: read
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'Self-hosted-PS5') && fromJSON('["self-hosted", "ps5"]') || 'ubuntu-24.04' }}
+    outputs:
+      artifact_name: ${{ steps.read-artifact.outputs.pkg_zip_name }}
+    runs-on: ${{ inputs.runner == 'Self-hosted-PS5' && fromJSON('["self-hosted", "ps5"]') || 'ubuntu-24.04' }}
 
     steps:
       - name: Set up cache env vars
@@ -59,8 +82,13 @@ jobs:
         id: build-vars
         shell: bash
         run: |
-          PROFILE_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'Server' }}"
-          LTO_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.lto || 'ThinLTO' }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
+            PROFILE_INPUT="${{ inputs.profile }}"
+            LTO_INPUT="${{ inputs.lto }}"
+          else
+            PROFILE_INPUT="Server"
+            LTO_INPUT="ThinLTO"
+          fi
 
           bash ci-scripts/.github/scripts/resolve-build-vars.sh "$PROFILE_INPUT" "$LTO_INPUT" >> "$GITHUB_OUTPUT"
 
