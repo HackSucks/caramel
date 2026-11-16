@@ -3259,6 +3259,13 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 			goto bad;
 	}
 
+	/*
+	 * Crypto is asynchronous now, so bouncing every bio through dm-crypt's
+	 * workqueues just adds latency. Do the conversion inline.
+	 */
+	set_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags);
+	set_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags);
+
 	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
 	if (ret < 0)
 		goto bad;
