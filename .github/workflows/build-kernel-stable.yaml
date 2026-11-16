@@ -1,0 +1,32 @@
+name: "Caramel-Stable"
+run-name: "Caramel-Stable-SlopMax-ThinLTO (${{ github.ref_name }})"
+
+on:
+  push:
+    branches:
+      - main
+      - next
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # ThinLTO is the release flavour. It is only built once the change has
+  # reached main or next, never on service/experimental branches.
+  thinlto:
+    name: "SlopMax / ThinLTO"
+    uses: ./.github/workflows/build-kernel_latest.yaml
+    with:
+      profile: SlopMax
+      lto: ThinLTO
+      runner: Hosted
+    secrets: inherit

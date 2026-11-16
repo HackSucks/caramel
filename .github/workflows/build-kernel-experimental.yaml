@@ -1,5 +1,5 @@
 name: "Caramel-Experimental"
-run-name: "Caramel-Experimental-SlopMax (${{ github.ref_name }})"
+run-name: "Caramel-Experimental-SlopMax-NoLTO (${{ github.ref_name }})"
 
 on:
   push:
@@ -9,15 +9,15 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: experimental-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  # NoLTO is the gate. Nothing is promoted and ThinLTO is not attempted
-  # unless this build succeeds.
+  # Only NoLTO is built here. It is what gets booted and tested first.
+  # ThinLTO is built later, when the change lands on next/main.
   nolto:
     name: "SlopMax / NoLTO"
     uses: ./.github/workflows/build-kernel_latest.yaml
@@ -26,58 +26,3 @@ jobs:
       lto: NoLTO
       runner: Hosted
     secrets: inherit
-
-  # Only built once the NoLTO kernel works.
-  thinlto:
-    name: "SlopMax / ThinLTO"
-    needs: nolto
-    uses: ./.github/workflows/build-kernel_latest.yaml
-    with:
-      profile: SlopMax
-      lto: ThinLTO
-      runner: Hosted
-    secrets: inherit
-
-  # Testing gets the NoLTO build. main/next are never touched here.
-  promote:
-    name: "Promote to testing"
-    needs: nolto
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout the built commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Map the experimental branch to its testing branch
-        id: target
-        shell: bash
-        run: |
-          case "${GITHUB_REF_NAME}" in
-            experimental)     TARGET="testing" ;;
-            experimental-7.4-rc3) TARGET="testing-7.4-rc3" ;;
-            *)
-              echo "::error::No testing branch mapped for ${GITHUB_REF_NAME}"
-              exit 1
-              ;;
-          esac
-          echo "branch=${TARGET}" >> "$GITHUB_OUTPUT"
-
-      - name: Fast-forward the testing branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin
-          git push origin "HEAD:refs/heads/${{ steps.target.outputs.branch }}" --force-with-lease
-
-      - name: "Notify: promoted"
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WORKFLOW_WEBHOOK }}
-        run: |
-          bash .github/scripts/notify.sh \
-            "**${{ github.repository }}** NoLTO SlopMax build succeeded; \`${{ github.ref_name }}\` promoted to \`${{ steps.target.outputs.branch }}\`
-          https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
