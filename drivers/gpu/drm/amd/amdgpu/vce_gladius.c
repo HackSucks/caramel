@@ -392,7 +392,6 @@ static const struct amd_ip_funcs vce_gladius_ip_funcs = {
 	.hw_fini = vce_gladius_hw_fini,
 	.suspend = vce_gladius_suspend,
 	.resume = vce_gladius_resume,
-	.is_idle = vce_gladius_is_idle,
 	.wait_for_idle = vce_gladius_wait_idle,
 	.set_clockgating_state = vce_gladius_clockgating,
 	.set_powergating_state = vce_gladius_powergating,
