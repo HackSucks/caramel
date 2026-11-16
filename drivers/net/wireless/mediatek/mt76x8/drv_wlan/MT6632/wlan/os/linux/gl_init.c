@@ -863,6 +863,12 @@ static int wlanDoIOCTL(struct net_device *prDev, struct ifreq *prIfReq, int i4Cm
 	return ret;
 }				/* end of wlanDoIOCTL() */
 
+static int wlanSiocDevPrivate(struct net_device *prDev, struct ifreq *prIfReq,
+                              void __user *data, int i4Cmd)
+{
+        return wlanDoIOCTL(prDev, prIfReq, i4Cmd);
+}
+
 /*----------------------------------------------------------------------------*/
 /*!
 * \brief Export wlan GLUE_INFO_T pointer to p2p module
@@ -1515,7 +1521,7 @@ static const struct net_device_ops wlan_netdev_ops = {
 	.ndo_stop = wlanStop,
 	.ndo_set_rx_mode = wlanSetMulticastList,
 	.ndo_get_stats = wlanGetStats,
-	.ndo_do_ioctl = wlanDoIOCTL,
+	.ndo_siocdevprivate = wlanSiocDevPrivate,
 	.ndo_start_xmit = wlanHardStartXmit,
 	.ndo_init = wlanInit,
 	.ndo_uninit = wlanUninit,

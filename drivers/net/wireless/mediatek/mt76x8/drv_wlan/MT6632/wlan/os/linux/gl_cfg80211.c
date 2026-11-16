@@ -199,12 +199,12 @@ mtk_cfg80211_change_iface(struct wiphy *wiphy,
 int
 mtk_cfg80211_add_key(struct wiphy *wiphy,
 		     struct wireless_dev *wdev, int link_id,
-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
+		     u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr, struct key_params *params)
 #else
 int
 mtk_cfg80211_add_key(struct wiphy *wiphy,
 		     struct net_device *ndev, int link_id,
-		     u8 key_index, bool pairwise, const u8 *mac_addr, struct key_params *params)
+		     u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr, struct key_params *params)
 #endif
 {
 	PARAM_KEY_T rKey;
@@ -230,9 +230,9 @@ mtk_cfg80211_add_key(struct wiphy *wiphy,
 	DBGLOG(RSN, INFO, "mtk_cfg80211_add_key\n");
 	if (mac_addr) {
 		DBGLOG(RSN, INFO,
-		       "keyIdx = %d pairwise = %d mac = " MACSTR "\n", key_index, pairwise, MAC2STR(mac_addr));
+		       "keyIdx = %d pairwise = %d mac = " MACSTR "\n", key_index, (key_type == NL80211_KEYTYPE_PAIRWISE), MAC2STR(mac_addr));
 	} else {
-		DBGLOG(RSN, INFO, "keyIdx = %d pairwise = %d null mac\n", key_index, pairwise);
+		DBGLOG(RSN, INFO, "keyIdx = %d pairwise = %d null mac\n", key_index, (key_type == NL80211_KEYTYPE_PAIRWISE));
 	}
 	DBGLOG(RSN, INFO, "Cipher = %x\n", params->cipher);
 	DBGLOG_MEM8(RSN, INFO, params->key, params->key_len);
@@ -280,7 +280,7 @@ mtk_cfg80211_add_key(struct wiphy *wiphy,
 		}
 	}
 
-	if (pairwise) {
+	if (key_type == NL80211_KEYTYPE_PAIRWISE) {
 		ASSERT(mac_addr);
 		rKey.u4KeyIndex |= BIT(31);
 		rKey.u4KeyIndex |= BIT(30);
@@ -326,7 +326,7 @@ mtk_cfg80211_add_key(struct wiphy *wiphy,
 
 	prDetRplyInfo = &prBssInfo->rDetRplyInfo;
 
-	if ((!pairwise) && ((params->cipher == WLAN_CIPHER_SUITE_TKIP) || (params->cipher == WLAN_CIPHER_SUITE_CCMP))) {
+	if ((key_type != NL80211_KEYTYPE_PAIRWISE) && ((params->cipher == WLAN_CIPHER_SUITE_TKIP) || (params->cipher == WLAN_CIPHER_SUITE_CCMP))) {
 		if ((prDetRplyInfo->ucCurKeyId == key_index) &&
 			(!kalMemCmp(prDetRplyInfo->aucKeyMaterial, params->key, params->key_len))) {
 			DBGLOG(RSN, TRACE, "M3/G1, KeyID and KeyValue equal.\n");
@@ -365,7 +365,7 @@ int
 mtk_cfg80211_get_key(struct wiphy *wiphy,
 		     struct wireless_dev *wdev, int link_id,
 		     u8 key_index,
-		     bool pairwise,
+		     enum nl80211_key_type key_type,
 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *)
 )
 #else
@@ -373,7 +373,7 @@ int
 mtk_cfg80211_get_key(struct wiphy *wiphy,
 		     struct net_device *ndev, int link_id,
 		     u8 key_index,
-		     bool pairwise,
+		     enum nl80211_key_type key_type,
 		     const u8 *mac_addr, void *cookie, void (*callback) (void *cookie, struct key_params *)
 )
 #endif
@@ -403,9 +403,9 @@ mtk_cfg80211_get_key(struct wiphy *wiphy,
  */
 /*----------------------------------------------------------------------------*/
 #if KERNEL_VERSION(6, 7, 0) <= CFG80211_VERSION_CODE
-int mtk_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
+int mtk_cfg80211_del_key(struct wiphy *wiphy, struct wireless_dev *wdev, int link_id, u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr)
 #else
-int mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
+int mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_id, u8 key_index, enum nl80211_key_type key_type, const u8 *mac_addr)
 #endif
 {
 	P_GLUE_INFO_T prGlueInfo = NULL;
@@ -426,9 +426,9 @@ int mtk_cfg80211_del_key(struct wiphy *wiphy, struct net_device *ndev, int link_
 	DBGLOG(RSN, TRACE, "mtk_cfg80211_del_key\n");
 	if (mac_addr) {
 		DBGLOG(RSN, TRACE,
-		       "keyIdx = %d pairwise = %d mac = " MACSTR "\n", key_index, pairwise, MAC2STR(mac_addr));
+		       "keyIdx = %d pairwise = %d mac = " MACSTR "\n", key_index, (key_type == NL80211_KEYTYPE_PAIRWISE), MAC2STR(mac_addr));
 	} else {
-		DBGLOG(RSN, TRACE, "keyIdx = %d pairwise = %d null mac\n", key_index, pairwise);
+		DBGLOG(RSN, TRACE, "keyIdx = %d pairwise = %d null mac\n", key_index, (key_type == NL80211_KEYTYPE_PAIRWISE));
 	}
 #endif
 
