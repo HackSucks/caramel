@@ -1,0 +1,28 @@
+name: "Caramel-Testing"
+run-name: "Caramel-Testing-SlopMax-NoLTO (${{ github.ref_name }})"
+
+on:
+  push:
+    branches:
+      - testing
+      - testing-7.4-rc3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testing-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # The testing gate builds the same NoLTO flavour that was booted on hardware.
+  # ThinLTO is only built once the change lands on main or next.
+  nolto:
+    name: "SlopMax / NoLTO"
+    uses: ./.github/workflows/build-kernel_latest.yaml
+    with:
+      profile: SlopMax
+      lto: NoLTO
+      runner: Hosted
+    secrets: inherit
