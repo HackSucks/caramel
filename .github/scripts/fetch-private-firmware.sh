@@ -9,7 +9,14 @@ if [ -n "$FW_REPO_PAT" ]; then
   cp /tmp/jaguar-fw/sd8797_uapsta.bin "$DEST/sd8797_uapsta.bin"
   rm -rf /tmp/jaguar-fw
 else
-  curl -fL -o "$DEST/sd8797_uapsta.bin" \
-    "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/mrvl/sd8797_uapsta.bin"
+  F=mrvl/sd8797_uapsta.bin
+  ok=0
+  for url in \
+    "https://gitlab.com/kernel-firmware/linux-firmware/-/raw/main/$F" \
+    "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/$F"; do
+    if curl -fL --connect-timeout 20 --max-time 120 --retry 3 --retry-delay 5 \
+         -o "$DEST/sd8797_uapsta.bin" "$url"; then ok=1; break; fi
+  done
+  [ "$ok" = 1 ] || { echo "firmware download failed on all mirrors"; exit 1; }
 fi
 test -s "$DEST/sd8797_uapsta.bin"
